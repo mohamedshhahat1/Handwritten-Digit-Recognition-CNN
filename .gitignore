@@ -1,0 +1,73 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+*.pyo
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data directory contents (keep structure with .gitkeep)
+data/mnist/
+data/MNIST/
+
+# Saved models (keep directory with .gitkeep)
+saved_models/*.pth
+saved_models/*.pt
+
+# Output plots (keep directory with .gitkeep)
+outputs/
+!outputs/.gitkeep
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+*.egg
+sdist/
+wheels/
+
+# Environment files
+.env
+.env.local
+
+# PyTorch / training artifacts
+runs/
+logs/
+*.onnx
+
+# Package manager
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+
+# NOTE: .gitkeep files are empty placeholder files placed inside directories
+# that would otherwise be empty. Git does not track empty directories, so
+# .gitkeep ensures the directory structure is preserved in the repository.
+# Add .gitkeep to: data/, saved_models/, outputs/
