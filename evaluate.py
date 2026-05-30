@@ -1,19 +1,22 @@
 """
 Evaluation Module for Handwritten Digit Recognition (MNIST) using a CNN in PyTorch.
+===================================================================================
 
 This script:
-  1. Loads a trained CNN model from 'saved_models/mnist_cnn.pth'
+  1. Loads a trained CNN model (best version via ModelManager)
   2. Evaluates it on the MNIST test set (10,000 images)
   3. Prints overall accuracy
   4. Generates a per-digit classification report (precision, recall, f1-score)
   5. Generates and displays a confusion matrix
   6. Shows how many digits were correctly vs incorrectly predicted
 
-Requirements:
-  pip install torch torchvision scikit-learn numpy matplotlib seaborn
+Usage:
+    python evaluate.py
+    python evaluate.py --model-path saved_models/mnist_cnn_best.pth
 """
 
 import os
+import argparse
 import numpy as np
 import torch
 from torchvision import datasets, transforms
@@ -24,102 +27,106 @@ matplotlib.use('Agg')  # Use non-interactive backend (no display needed)
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Import the CNN model from our model package
+# Import project modules
+import config
 from model.cnn_model import CNN
+from utils.model_manager import ModelManager
 
 
-# ---------------------------------------------------------------------------
-# Evaluation function
-# ---------------------------------------------------------------------------
-def evaluate_model():
+def evaluate_model(model_path=None):
     """
     Main evaluation function that loads the model, runs inference on the
     MNIST test set, and prints/saves evaluation metrics.
+
+    Args:
+        model_path (str, optional): Path to a specific model file to evaluate.
+            If None, loads the best model via ModelManager.
     """
 
     # --- Device configuration ---
-    # Use GPU if available for faster inference, otherwise fall back to CPU
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = config.DEVICE
     print(f"Using device: {device}")
     print("-" * 60)
 
-    # --- Path to the saved model ---
-    model_path = os.path.join('saved_models', 'mnist_cnn.pth')
+    # --- Load the model ---
+    model = CNN().to(device)
 
-    # Check if the model file exists
-    if not os.path.exists(model_path):
-        print(f"ERROR: Trained model not found at '{model_path}'.")
-        print("Please train the model first before running evaluation.")
-        print("Expected path: saved_models/mnist_cnn.pth")
-        return
+    if model_path and os.path.exists(model_path):
+        # Load from specific path
+        checkpoint = torch.load(model_path, map_location=device)
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
+        print(f"Model loaded from: {model_path}")
+    else:
+        # Use ModelManager to find best or latest model
+        manager = ModelManager()
+        try:
+            epoch, metrics = manager.load_model(model, version="best")
+        except FileNotFoundError:
+            try:
+                epoch, metrics = manager.load_model(model, version="latest")
+            except FileNotFoundError:
+                # Fall back to legacy path
+                legacy_path = os.path.join(config.MODEL_DIR, 'mnist_cnn.pth')
+                if os.path.exists(legacy_path):
+                    model.load_state_dict(torch.load(legacy_path, map_location=device))
+                    print(f"Model loaded from legacy path: {legacy_path}")
+                else:
+                    print("ERROR: No trained model found!")
+                    print("Please train the model first by running: python train.py")
+                    return
+
+    model.eval()
+    print("-" * 60)
 
     # --- Data preprocessing ---
-    # The same transforms used during training must be applied during evaluation
     transform = transforms.Compose([
-        transforms.ToTensor(),                          # Convert PIL image to tensor [0, 1]
-        transforms.Normalize((0.1307,), (0.3081,))     # Normalize with MNIST mean and std
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
     ])
 
     # --- Load the MNIST test dataset ---
     print("Loading MNIST test dataset...")
     test_dataset = datasets.MNIST(
-        root='./data/mnist',    # Directory to store/download the dataset
-        train=False,            # Use the test split (10,000 images)
-        download=True,          # Download if not already present
-        transform=transform     # Apply preprocessing
+        root=config.DATA_DIR,
+        train=False,
+        download=True,
+        transform=transform
     )
 
-    # Create a DataLoader for batched evaluation
     test_loader = DataLoader(
         test_dataset,
-        batch_size=1000,        # Process 1000 images at a time
-        shuffle=False           # Keep order consistent for analysis
+        batch_size=1000,
+        shuffle=False,
+        num_workers=config.NUM_WORKERS
     )
     print(f"Test set size: {len(test_dataset)} images")
-    print("-" * 60)
-
-    # --- Load the trained model ---
-    print(f"Loading trained model from '{model_path}'...")
-    model = CNN().to(device)
-
-    # Load the saved weights (map to the current device)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-
-    # Set model to evaluation mode (disables dropout, batchnorm behaves differently)
-    model.eval()
-    print("Model loaded successfully!")
     print("-" * 60)
 
     # --- Run inference on the test set ---
     print("Evaluating model on test set...")
 
-    all_predictions = []   # Store all predicted labels
-    all_targets = []       # Store all true labels
-    correct = 0            # Count of correct predictions
-    total = 0              # Total number of samples
+    all_predictions = []
+    all_targets = []
+    correct = 0
+    total = 0
 
-    # Disable gradient computation for faster inference (no backprop needed)
     with torch.no_grad():
         for images, labels in test_loader:
-            # Move data to the device (GPU/CPU)
             images = images.to(device)
             labels = labels.to(device)
 
-            # Forward pass: get model predictions
             outputs = model(images)
-
-            # Get the predicted class (digit with highest score)
             _, predicted = torch.max(outputs, 1)
 
-            # Update counters
             total += labels.size(0)
             correct += (predicted == labels).sum().item()
 
-            # Store predictions and targets for detailed metrics
             all_predictions.extend(predicted.cpu().numpy())
             all_targets.extend(labels.cpu().numpy())
 
-    # Convert to numpy arrays for sklearn
     all_predictions = np.array(all_predictions)
     all_targets = np.array(all_targets)
 
@@ -150,14 +157,14 @@ def evaluate_model():
               f"(out of {digit_total:4d}) -> {digit_acc:.2f}% accuracy")
     print()
 
-    # --- Classification report (precision, recall, f1-score per class) ---
+    # --- Classification report ---
     print("Classification Report (per-digit precision, recall, f1-score):")
     print("-" * 60)
     report = classification_report(
         all_targets,
         all_predictions,
         target_names=[f"Digit {i}" for i in range(10)],
-        digits=4  # Show 4 decimal places for precision
+        digits=4
     )
     print(report)
 
@@ -166,7 +173,6 @@ def evaluate_model():
     print("-" * 60)
     cm = confusion_matrix(all_targets, all_predictions)
 
-    # Print the confusion matrix as text
     print("         Predicted")
     print("          ", end="")
     for i in range(10):
@@ -180,13 +186,13 @@ def evaluate_model():
         print()
     print()
 
-    # --- Save confusion matrix as a heatmap image ---
+    # --- Save confusion matrix as a heatmap ---
     plt.figure(figsize=(10, 8))
     sns.heatmap(
         cm,
-        annot=True,           # Show numbers in cells
-        fmt='d',              # Integer format
-        cmap='Blues',          # Color scheme
+        annot=True,
+        fmt='d',
+        cmap='Blues',
         xticklabels=digit_names,
         yticklabels=digit_names
     )
@@ -195,14 +201,12 @@ def evaluate_model():
     plt.ylabel('True Digit')
     plt.tight_layout()
 
-    # Save the figure
-    os.makedirs('outputs', exist_ok=True)
-    confusion_matrix_path = os.path.join('outputs', 'confusion_matrix.png')
+    os.makedirs(config.OUTPUT_DIR, exist_ok=True)
+    confusion_matrix_path = os.path.join(config.OUTPUT_DIR, 'confusion_matrix.png')
     plt.savefig(confusion_matrix_path, dpi=150)
     plt.close()
     print(f"Confusion matrix heatmap saved to: {confusion_matrix_path}")
     print("-" * 60)
-
     print("\nEvaluation complete!")
 
 
@@ -210,4 +214,8 @@ def evaluate_model():
 # Entry point
 # ---------------------------------------------------------------------------
 if __name__ == '__main__':
-    evaluate_model()
+    parser = argparse.ArgumentParser(description="Evaluate the trained CNN model")
+    parser.add_argument('--model-path', type=str, default=None,
+                        help='Path to a specific model file to evaluate')
+    args = parser.parse_args()
+    evaluate_model(model_path=args.model_path)

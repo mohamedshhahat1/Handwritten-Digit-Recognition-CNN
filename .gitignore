@@ -53,6 +53,13 @@ runs/
 logs/
 *.onnx
 
+# TensorBoard logs
+runs/*
+!runs/.gitkeep
+
+# Results directory
+results/
+
 # Package manager
 pip-log.txt
 pip-delete-this-directory.txt
