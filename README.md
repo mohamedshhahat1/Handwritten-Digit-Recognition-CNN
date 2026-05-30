@@ -21,10 +21,19 @@ This project demonstrates the power of convolutional neural networks for image c
 - 📊 Training pipeline with loss and accuracy tracking
 - 📈 Visualization utilities for training metrics and predictions
 - 🔍 Single image prediction support
-- 💾 Model checkpointing and saving
+- 💾 Model checkpointing and versioning
 - 📉 Dropout regularization to prevent overfitting
 - 🖼️ Automatic MNIST dataset downloading and preprocessing
 - 📝 Comprehensive evaluation with detailed metrics
+- 🚀 **FastAPI REST API** with `/predict` endpoint
+- 🌐 **Web UI** — draw digits and get live predictions
+- 📦 **Docker** support for easy deployment
+- 🧠 **CNN vs MLP comparison** with accuracy benchmarks
+- 📊 **Auto-generated PDF reports** of training results
+- ⚡ Early stopping to prevent overfitting
+- 🧪 Centralized configuration system
+- 📡 TensorBoard integration for live monitoring
+- 🎨 Data augmentation (rotation, shift, scale, noise)
 
 ---
 
@@ -32,24 +41,39 @@ This project demonstrates the power of convolutional neural networks for image c
 
 ```
 Handwritten-Digit-Recognition-CNN/
+├── api/
+│   ├── __init__.py
+│   ├── app.py                 # FastAPI prediction API
+│   └── run_server.py          # Server startup script
+├── web/
+│   └── index.html             # Drawing canvas Web UI
 ├── model/
 │   ├── __init__.py
-│   └── cnn_model.py          # CNN architecture definition
+│   ├── cnn_model.py           # CNN architecture
+│   └── mlp_model.py           # MLP architecture (for comparison)
 ├── data/
 │   ├── __init__.py
-│   └── data_loader.py        # Data loading & preprocessing
+│   └── data_loader.py         # Data loading & augmentation
 ├── utils/
 │   ├── __init__.py
-│   └── visualize.py          # Plotting utilities
-├── saved_models/             # Trained model weights
-├── outputs/                  # Generated plots and figures
-├── main.py                   # CLI entry point (train/evaluate/predict/demo)
-├── train.py                  # Training pipeline
-├── evaluate.py               # Model evaluation script
-├── predict.py                # Single image prediction
-├── requirements.txt          # Python dependencies
-├── .gitignore                # Git ignore rules
-└── README.md                 # Project documentation
+│   ├── visualize.py           # Plotting utilities
+│   ├── logger.py              # TensorBoard logging
+│   ├── model_manager.py       # Model versioning
+│   └── early_stopping.py      # Early stopping utility
+├── saved_models/              # Trained model weights
+├── outputs/                   # Generated plots and reports
+├── config.py                  # Centralized configuration
+├── main.py                    # CLI entry point
+├── train.py                   # Training pipeline
+├── evaluate.py                # Model evaluation
+├── predict.py                 # Image prediction & CLI
+├── compare_models.py          # CNN vs MLP comparison
+├── generate_report.py         # PDF report generation
+├── Dockerfile                 # Docker containerization
+├── docker-compose.yml         # Docker Compose config
+├── requirements.txt           # Python dependencies
+├── .gitignore
+└── README.md
 ```
 
 ---
@@ -145,6 +169,57 @@ python predict.py
 ```
 
 The script will load a sample image and display the predicted digit along with the model's confidence score.
+
+### 🚀 FastAPI Server
+
+Start the prediction API:
+
+```bash
+python api/run_server.py
+# or
+uvicorn api.app:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Then use the API:
+
+```bash
+# Predict from image file
+curl -X POST "http://localhost:8000/predict" -F "file=@digit.png"
+
+# Response:
+# {"digit": 7, "confidence": 0.98, "probabilities": {"0": 0.001, ...}}
+```
+
+### 🌐 Web UI
+
+Open `http://localhost:8000` in your browser (with the API server running) to access the drawing canvas. Draw a digit and click "Predict" to see results!
+
+### 📦 Docker
+
+```bash
+# Build and run with Docker
+docker build -t digit-recognition .
+docker run -p 8000:8000 digit-recognition
+
+# Or use Docker Compose
+docker-compose up --build
+```
+
+### 🧠 Model Comparison (CNN vs MLP)
+
+```bash
+python compare_models.py
+```
+
+Trains both models and generates comparison plots in `outputs/`.
+
+### 📊 Generate PDF Report
+
+```bash
+python generate_report.py
+```
+
+Creates a professional PDF report at `outputs/training_report.pdf`.
 
 ---
 

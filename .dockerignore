@@ -1,0 +1,49 @@
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.venv/
+
+# Environment files
+.env
+.env.local
+
+# Data that will download at runtime if needed
+data/mnist
+
+# Training outputs
+runs/
+outputs/
+
+# Claude configuration
+.claude/
+
+# IDE and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Docker files (no need to include in context)
+Dockerfile
+docker-compose.yml
+
+# Documentation
+*.md
+
+# Jupyter notebooks
+*.ipynb
+.ipynb_checkpoints/
+
+# Package lock
+package-lock.json
