@@ -89,7 +89,39 @@ EARLY_STOPPING_PATIENCE = 5
 EARLY_STOPPING_MIN_DELTA = 0.001
 
 # =============================================================================
-# 6. MODEL SAVING
+# 6. LEARNING RATE SCHEDULING
+# =============================================================================
+# Adjusts the learning rate during training for better convergence.
+# Cosine annealing with warm restarts gradually decreases LR then "restarts"
+# to escape local minima and explore new regions of the loss landscape.
+
+# LR_SCHEDULER_ENABLED: Master switch to enable/disable LR scheduling.
+LR_SCHEDULER_ENABLED = True
+
+# LR_SCHEDULER_TYPE: Which scheduler to use.
+# Options: "cosine_warm_restarts", "cosine_annealing", "step"
+#   - cosine_warm_restarts: Cosine decay with periodic warm restarts (recommended)
+#   - cosine_annealing: Single cosine decay over all epochs
+#   - step: Reduce LR by a factor every N epochs
+LR_SCHEDULER_TYPE = "cosine_warm_restarts"
+
+# LR_T0: Number of epochs for the FIRST restart cycle.
+# After T0 epochs, the learning rate resets to its initial value.
+# Shorter cycles = more frequent restarts = more exploration.
+LR_T0 = 5
+
+# LR_T_MULT: Multiplier for subsequent cycle lengths.
+# Each restart cycle is T_MULT times longer than the previous one.
+# T_MULT=2 means cycles of length: T0, T0*2, T0*4, ...
+# Example with T0=5, T_MULT=2: cycles of 5, 10, 20 epochs.
+LR_T_MULT = 2
+
+# LR_ETA_MIN: Minimum learning rate at the bottom of each cosine cycle.
+# The LR will never go below this value. Set to 0 for full decay.
+LR_ETA_MIN = 1e-6
+
+# =============================================================================
+# 7. MODEL SAVING
 # =============================================================================
 # Controls how and where trained models are saved to disk.
 
@@ -105,7 +137,7 @@ MODEL_NAME_PREFIX = "mnist_cnn"
 SAVE_BEST_ONLY = True
 
 # =============================================================================
-# 7. DATA AUGMENTATION
+# 8. DATA AUGMENTATION
 # =============================================================================
 # Artificially expands the training set by applying random transformations.
 # This helps the model generalize better to new handwriting styles.
@@ -128,7 +160,7 @@ TRANSLATE_RANGE = (0.1, 0.1)
 SCALE_RANGE = (0.9, 1.1)
 
 # =============================================================================
-# 8. TENSORBOARD LOGGING
+# 9. TENSORBOARD LOGGING
 # =============================================================================
 # TensorBoard provides real-time visualization of training progress.
 # Launch with: tensorboard --logdir=./runs
@@ -141,7 +173,7 @@ LOG_DIR = "./runs"
 LOG_INTERVAL = 100
 
 # =============================================================================
-# 9. PATHS AND DIRECTORIES
+# 10. PATHS AND DIRECTORIES
 # =============================================================================
 # General output directory for any generated files (plots, reports, etc.).
 
@@ -196,6 +228,14 @@ def print_config():
 │  Min Delta:           {min_delta}
 └─────────────────────────────────────────────────────────────────┘
 
+┌─── Learning Rate Scheduling ────────────────────────────────────┐
+│  Enabled:             {lr_sched_enabled}
+│  Scheduler Type:      {lr_sched_type}
+│  T0 (first cycle):   {lr_t0} epochs
+│  T_mult:             {lr_t_mult}
+│  Min LR (eta_min):   {lr_eta_min}
+└─────────────────────────────────────────────────────────────────┘
+
 ┌─── Model Saving ────────────────────────────────────────────────┐
 │  Model Directory:     {model_dir}
 │  Model Name Prefix:   {model_prefix}
@@ -230,6 +270,11 @@ def print_config():
         cuda=torch.cuda.is_available(),
         patience=EARLY_STOPPING_PATIENCE,
         min_delta=EARLY_STOPPING_MIN_DELTA,
+        lr_sched_enabled=LR_SCHEDULER_ENABLED,
+        lr_sched_type=LR_SCHEDULER_TYPE,
+        lr_t0=LR_T0,
+        lr_t_mult=LR_T_MULT,
+        lr_eta_min=LR_ETA_MIN,
         model_dir=MODEL_DIR,
         model_prefix=MODEL_NAME_PREFIX,
         save_best=SAVE_BEST_ONLY,

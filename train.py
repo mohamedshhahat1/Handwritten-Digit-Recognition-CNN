@@ -102,6 +102,38 @@ def train_model(num_epochs=None, learning_rate=None, batch_size=None, augment=No
         weight_decay=config.WEIGHT_DECAY
     )
 
+    # Learning rate scheduler (cosine annealing with warm restarts)
+    scheduler = None
+    if config.LR_SCHEDULER_ENABLED:
+        if config.LR_SCHEDULER_TYPE == "cosine_warm_restarts":
+            scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                optimizer,
+                T_0=config.LR_T0,
+                T_mult=config.LR_T_MULT,
+                eta_min=config.LR_ETA_MIN
+            )
+            print(f"\nLR Scheduler: CosineAnnealingWarmRestarts "
+                  f"(T0={config.LR_T0}, T_mult={config.LR_T_MULT}, "
+                  f"eta_min={config.LR_ETA_MIN})")
+        elif config.LR_SCHEDULER_TYPE == "cosine_annealing":
+            scheduler = optim.lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=num_epochs,
+                eta_min=config.LR_ETA_MIN
+            )
+            print(f"\nLR Scheduler: CosineAnnealingLR "
+                  f"(T_max={num_epochs}, eta_min={config.LR_ETA_MIN})")
+        elif config.LR_SCHEDULER_TYPE == "step":
+            scheduler = optim.lr_scheduler.StepLR(
+                optimizer, step_size=5, gamma=0.5
+            )
+            print(f"\nLR Scheduler: StepLR (step_size=5, gamma=0.5)")
+        else:
+            print(f"\nWARNING: Unknown scheduler type '{config.LR_SCHEDULER_TYPE}', "
+                  f"using constant LR")
+    else:
+        print("\nLR Scheduler: Disabled (constant learning rate)")
+
     # =========================================================================
     # STEP 6: Initialize utilities
     # =========================================================================
@@ -236,8 +268,13 @@ def train_model(num_epochs=None, learning_rate=None, batch_size=None, augment=No
         print(f"\nEpoch [{epoch+1}/{num_epochs}] Summary: "
               f"Train Loss: {epoch_loss:.4f} | "
               f"Train Acc: {epoch_accuracy:.2f}% | "
-              f"Val Acc: {val_accuracy:.2f}%")
+              f"Val Acc: {val_accuracy:.2f}% | "
+              f"LR: {optimizer.param_groups[0]['lr']:.2e}")
         print("-" * 60)
+
+        # ----- Learning Rate Scheduler Step -----
+        if scheduler is not None:
+            scheduler.step()
 
         # ----- Early Stopping Check -----
         if early_stopping(val_accuracy, epoch + 1):

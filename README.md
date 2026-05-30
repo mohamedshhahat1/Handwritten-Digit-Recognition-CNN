@@ -701,7 +701,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~PDF report generation~~
 - [x] ~~OCR / text recognition (CRNN + CTC)~~
 - [x] ~~Arabic language support~~
-- [ ] Learning rate scheduling (cosine annealing, warm restarts)
+- [x] ~~Learning rate scheduling (cosine annealing, warm restarts)~~
 - [ ] Batch normalization in the CNN
 - [ ] ResNet-style skip connections for deeper architectures
 - [ ] Model quantization for edge deployment
