@@ -3,8 +3,15 @@ CNN Model for Handwritten Digit Recognition (MNIST)
 
 This module defines a Convolutional Neural Network (CNN) designed to classify
 handwritten digits (0-9) from 28x28 grayscale images. The architecture uses
-two convolutional layers followed by fully connected layers, which is a
-well-established pattern for image classification tasks.
+two convolutional layers with batch normalization followed by fully connected
+layers, which is a well-established pattern for image classification tasks.
+
+Batch Normalization:
+    BatchNorm normalizes activations between layers, which provides:
+    - Faster training convergence (allows higher learning rates)
+    - Reduced sensitivity to weight initialization
+    - Acts as a mild regularizer (reduces need for dropout)
+    - Stabilizes the distribution of layer inputs (reduces internal covariate shift)
 """
 
 import torch
@@ -21,9 +28,9 @@ class CNN(nn.Module):
 
     Architecture Summary:
         Input (1x28x28)
-        -> Conv2d (32 filters) -> ReLU -> MaxPool2d
-        -> Conv2d (64 filters) -> ReLU -> MaxPool2d
-        -> Flatten -> FC (128 units) -> ReLU -> Dropout
+        -> Conv2d (32 filters) -> BatchNorm2d -> ReLU -> MaxPool2d
+        -> Conv2d (64 filters) -> BatchNorm2d -> ReLU -> MaxPool2d
+        -> Flatten -> FC (128 units) -> BatchNorm1d -> ReLU -> Dropout
         -> FC (10 units, output)
     """
 
@@ -32,8 +39,8 @@ class CNN(nn.Module):
         Initialize the CNN layers.
 
         The network consists of:
-        - Two convolutional blocks (conv -> activation -> pooling)
-        - Two fully connected (dense) layers with dropout for regularization
+        - Two convolutional blocks (conv -> batchnorm -> activation -> pooling)
+        - Two fully connected (dense) layers with batch normalization and dropout
         """
         super(CNN, self).__init__()
 
@@ -51,6 +58,16 @@ class CNN(nn.Module):
         )
 
         # ============================================================
+        # BATCH NORMALIZATION 1 (after conv1)
+        # ============================================================
+        # Normalizes the 32 feature maps to have zero mean and unit variance.
+        # This stabilizes training and allows higher learning rates.
+        # Applied BEFORE activation (Conv -> BN -> ReLU is the standard order).
+        self.bn1 = nn.BatchNorm2d(
+            num_features=32     # One set of parameters per feature map channel
+        )
+
+        # ============================================================
         # CONVOLUTIONAL LAYER 2
         # ============================================================
         # Input: 32 feature maps, Output: 64 feature maps
@@ -62,6 +79,14 @@ class CNN(nn.Module):
             out_channels=64,    # Produce 64 different feature maps
             kernel_size=3,      # Each filter is 3x3 pixels
             padding=1           # Add 1 pixel border to keep dimensions unchanged
+        )
+
+        # ============================================================
+        # BATCH NORMALIZATION 2 (after conv2)
+        # ============================================================
+        # Normalizes the 64 feature maps before ReLU activation.
+        self.bn2 = nn.BatchNorm2d(
+            num_features=64     # One set of parameters per feature map channel
         )
 
         # ============================================================
@@ -86,6 +111,15 @@ class CNN(nn.Module):
         self.fc1 = nn.Linear(
             in_features=64 * 7 * 7,   # Flattened feature map size
             out_features=128           # Compressed representation
+        )
+
+        # ============================================================
+        # BATCH NORMALIZATION 3 (after fc1)
+        # ============================================================
+        # Normalizes the 128-dimensional FC output before activation.
+        # BatchNorm1d is used for 1D (non-spatial) tensors.
+        self.bn3 = nn.BatchNorm1d(
+            num_features=128    # One parameter per neuron
         )
 
         # ============================================================
@@ -122,14 +156,14 @@ class CNN(nn.Module):
                          raw scores (logits) for each of the 10 digit classes.
         """
         # --- Convolutional Block 1 ---
-        # Apply first convolution, then ReLU activation, then max pooling
+        # Apply first convolution, batch norm, ReLU activation, then max pooling
         # Shape: (batch, 1, 28, 28) -> (batch, 32, 28, 28) -> (batch, 32, 14, 14)
-        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.bn1(self.conv1(x))))
 
         # --- Convolutional Block 2 ---
-        # Apply second convolution, then ReLU activation, then max pooling
+        # Apply second convolution, batch norm, ReLU activation, then max pooling
         # Shape: (batch, 32, 14, 14) -> (batch, 64, 14, 14) -> (batch, 64, 7, 7)
-        x = self.pool(F.relu(self.conv2(x)))
+        x = self.pool(F.relu(self.bn2(self.conv2(x))))
 
         # --- Flatten ---
         # Reshape the 3D feature maps into a 1D vector for the fully connected layers
@@ -137,9 +171,9 @@ class CNN(nn.Module):
         x = x.view(-1, 64 * 7 * 7)
 
         # --- Fully Connected Block ---
-        # Apply first FC layer with ReLU activation
+        # Apply first FC layer with batch norm and ReLU activation
         # Shape: (batch, 3136) -> (batch, 128)
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.bn3(self.fc1(x)))
 
         # Apply dropout (only active during training, automatically disabled in eval mode)
         x = self.dropout(x)
