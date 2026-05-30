@@ -188,11 +188,6 @@ class HealthResponse(BaseModel):
 # Endpoints
 # =============================================================================
 
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint to verify the service is running."""
-    return {"status": "healthy", "model_loaded": model_loaded}
-
 
 @app.post("/predict", response_model=PredictionResponse)
 async def predict(file: UploadFile = File(...)):
@@ -262,3 +257,200 @@ async def serve_root():
         return FileResponse(index_path)
 
     return {"message": "Handwritten Digit Recognition API", "docs": "/docs"}
+
+
+@app.get("/ocr")
+async def serve_ocr():
+    """Serve the OCR web UI."""
+    web_dir = os.path.join(PROJECT_ROOT, "web")
+    ocr_path = os.path.join(web_dir, "ocr.html")
+
+    if os.path.exists(ocr_path):
+        return FileResponse(ocr_path)
+
+    return {"message": "OCR page not found. Place ocr.html in web/ directory."}
+
+
+# =============================================================================
+# OCR Mode — CRNN Text Recognition
+# =============================================================================
+
+ocr_model = None
+ocr_charset = None
+ocr_loaded = False
+
+
+def load_ocr_model():
+    """Load the CRNN OCR model if available."""
+    global ocr_model, ocr_charset, ocr_loaded
+
+    try:
+        from model.crnn_model import CRNN
+        from model.ocr_utils import OCRCharset
+
+        ocr_charset = OCRCharset()
+
+        model_path = os.path.join(PROJECT_ROOT, "saved_models", "ocr_crnn_best.pth")
+        if not os.path.exists(model_path):
+            print("WARNING: No OCR model found. Train with: python train_ocr.py")
+            return
+
+        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
+        ocr_model = CRNN(
+            num_classes=checkpoint.get('charset_size', ocr_charset.num_classes),
+            hidden_size=checkpoint.get('hidden_size', 256),
+            num_layers=checkpoint.get('num_layers', 2),
+        )
+        ocr_model.load_state_dict(checkpoint['model_state_dict'])
+        ocr_model.eval()
+        ocr_loaded = True
+        print(f"OCR model loaded successfully (CER: {checkpoint.get('cer', 'N/A')})")
+
+    except Exception as e:
+        print(f"WARNING: Failed to load OCR model: {e}")
+
+
+# Load OCR model on startup
+load_ocr_model()
+
+
+def preprocess_ocr_image(image):
+    """
+    Preprocess an image for OCR inference.
+
+    Resizes to height=32, maintains aspect ratio, converts to grayscale,
+    and normalizes to [0, 1].
+
+    Args:
+        image (PIL.Image): Input image.
+
+    Returns:
+        torch.Tensor: Shape (1, 1, 32, W) ready for CRNN.
+    """
+    # Convert to grayscale
+    image = image.convert('L')
+
+    # Resize to height=32, maintain aspect ratio
+    w, h = image.size
+    new_h = 32
+    new_w = max(int(w * new_h / h), 32)
+    image = image.resize((new_w, new_h), Image.BILINEAR)
+
+    # Invert if light background (OCR expects white text on black)
+    import numpy as np
+    arr = np.array(image)
+    if arr.mean() > 127:
+        arr = 255 - arr
+
+    # Convert to tensor and normalize
+    tensor = torch.FloatTensor(arr).unsqueeze(0).unsqueeze(0) / 255.0
+
+    return tensor
+
+
+class OCRResponse(BaseModel):
+    """Response body for OCR prediction."""
+    text: str
+    confidence: float
+    model_loaded: bool
+
+
+class OCRBase64Request(BaseModel):
+    """Request body for base64 OCR prediction."""
+    image: str
+
+
+@app.post("/predict/ocr", response_model=OCRResponse)
+async def predict_ocr(file: UploadFile = File(...)):
+    """
+    Recognize text from an uploaded image using OCR (CRNN + CTC).
+
+    Returns the recognized text string.
+    """
+    if ocr_model is None:
+        raise HTTPException(status_code=503, detail="OCR model not loaded. Train with: python train_ocr.py")
+
+    try:
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid image file")
+
+    try:
+        tensor = preprocess_ocr_image(image)
+        result = run_ocr_inference(tensor)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR inference error: {str(e)}")
+
+    return result
+
+
+@app.post("/predict/ocr/base64", response_model=OCRResponse)
+async def predict_ocr_base64(request: OCRBase64Request):
+    """
+    Recognize text from a base64-encoded image using OCR.
+
+    Accepts JSON body with a base64-encoded image (or data URL).
+    Returns recognized text.
+    """
+    if ocr_model is None:
+        raise HTTPException(status_code=503, detail="OCR model not loaded. Train with: python train_ocr.py")
+
+    try:
+        image_data = request.image
+        if ',' in image_data:
+            image_data = image_data.split(',')[1]
+
+        decoded = base64.b64decode(image_data)
+        image = Image.open(io.BytesIO(decoded))
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid base64 image data")
+
+    try:
+        tensor = preprocess_ocr_image(image)
+        result = run_ocr_inference(tensor)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"OCR inference error: {str(e)}")
+
+    return result
+
+
+def run_ocr_inference(tensor):
+    """
+    Run OCR inference on a preprocessed image tensor.
+
+    Args:
+        tensor (torch.Tensor): Shape (1, 1, 32, W).
+
+    Returns:
+        dict: {"text": str, "confidence": float, "model_loaded": True}
+    """
+    from model.ocr_utils import ctc_decode_batch
+
+    with torch.no_grad():
+        output = ocr_model(tensor)  # (seq_len, 1, num_classes)
+
+        # Get confidence (average max probability across timesteps)
+        probs = torch.exp(output)  # Convert log-probs to probs
+        max_probs = probs.max(dim=2)[0]  # Max prob at each timestep
+        confidence = float(max_probs.mean())
+
+        # Decode with CTC
+        texts = ctc_decode_batch(output, ocr_charset)
+        text = texts[0] if texts else ""
+
+    return {
+        "text": text,
+        "confidence": round(confidence, 4),
+        "model_loaded": True,
+    }
+
+
+@app.get("/health")
+async def health_check_extended():
+    """Extended health check with OCR status."""
+    return {
+        "status": "healthy",
+        "model_loaded": model_loaded,
+        "ocr_loaded": ocr_loaded,
+    }
