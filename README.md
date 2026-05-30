@@ -704,7 +704,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~Learning rate scheduling (cosine annealing, warm restarts)~~
 - [x] ~~Batch normalization in the CNN~~
 - [x] ~~ResNet-style skip connections for deeper architectures~~
-- [ ] Model quantization for edge deployment
+- [x] ~~Model quantization for edge deployment~~
 - [ ] ONNX export for cross-platform inference
 - [ ] Real handwriting dataset training (IAM, RIMES)
 - [ ] Beam search CTC decoding for better OCR accuracy
