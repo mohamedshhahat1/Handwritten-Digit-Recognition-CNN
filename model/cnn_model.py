@@ -1,10 +1,26 @@
 """
-CNN Model for Handwritten Digit Recognition (MNIST)
+CNN Models for Handwritten Digit Recognition (MNIST)
 
-This module defines a Convolutional Neural Network (CNN) designed to classify
-handwritten digits (0-9) from 28x28 grayscale images. The architecture uses
-two convolutional layers with batch normalization followed by fully connected
-layers, which is a well-established pattern for image classification tasks.
+This module defines CNN architectures for classifying handwritten digits (0-9)
+from 28x28 grayscale images:
+
+1. CNN — Standard 2-layer CNN with batch normalization (original architecture)
+2. ResNetCNN — Deeper architecture with ResNet-style skip connections
+
+ResNet (Residual Networks) Key Insight:
+    In very deep networks, gradients can vanish or explode, making training
+    difficult. Skip connections (shortcuts) solve this by allowing gradients
+    to flow directly through the network via identity mappings:
+
+        output = F.relu(layer(x) + x)   ← skip connection adds input to output
+
+    This means the network only needs to learn the RESIDUAL (the difference
+    between input and desired output), which is easier than learning the full
+    transformation from scratch. Benefits:
+    - Enables training of much deeper networks (100+ layers)
+    - Faster convergence due to better gradient flow
+    - No extra parameters for identity shortcuts
+    - Acts as an implicit ensemble of shallow networks
 
 Batch Normalization:
     BatchNorm normalizes activations between layers, which provides:
@@ -47,140 +63,260 @@ class CNN(nn.Module):
         # ============================================================
         # CONVOLUTIONAL LAYER 1
         # ============================================================
-        # Input: 1 channel (grayscale), Output: 32 feature maps
-        # Kernel size: 3x3, Padding: 1 (preserves spatial dimensions)
-        # After this layer: 32 x 28 x 28 (padding keeps size the same)
         self.conv1 = nn.Conv2d(
-            in_channels=1,      # Grayscale images have 1 color channel
-            out_channels=32,    # Produce 32 different feature maps
-            kernel_size=3,      # Each filter is 3x3 pixels
-            padding=1           # Add 1 pixel border to keep dimensions unchanged
+            in_channels=1, out_channels=32, kernel_size=3, padding=1
         )
-
-        # ============================================================
-        # BATCH NORMALIZATION 1 (after conv1)
-        # ============================================================
-        # Normalizes the 32 feature maps to have zero mean and unit variance.
-        # This stabilizes training and allows higher learning rates.
-        # Applied BEFORE activation (Conv -> BN -> ReLU is the standard order).
-        self.bn1 = nn.BatchNorm2d(
-            num_features=32     # One set of parameters per feature map channel
-        )
+        self.bn1 = nn.BatchNorm2d(32)
 
         # ============================================================
         # CONVOLUTIONAL LAYER 2
         # ============================================================
-        # Input: 32 feature maps, Output: 64 feature maps
-        # Kernel size: 3x3, Padding: 1 (preserves spatial dimensions)
-        # After this layer (before pooling): 64 x 14 x 14
-        # After max pooling: 64 x 7 x 7
         self.conv2 = nn.Conv2d(
-            in_channels=32,     # Takes the 32 feature maps from conv1
-            out_channels=64,    # Produce 64 different feature maps
-            kernel_size=3,      # Each filter is 3x3 pixels
-            padding=1           # Add 1 pixel border to keep dimensions unchanged
+            in_channels=32, out_channels=64, kernel_size=3, padding=1
         )
+        self.bn2 = nn.BatchNorm2d(64)
 
         # ============================================================
-        # BATCH NORMALIZATION 2 (after conv2)
+        # MAX POOLING, FC LAYERS, DROPOUT
         # ============================================================
-        # Normalizes the 64 feature maps before ReLU activation.
-        self.bn2 = nn.BatchNorm2d(
-            num_features=64     # One set of parameters per feature map channel
-        )
-
-        # ============================================================
-        # MAX POOLING LAYER
-        # ============================================================
-        # Reduces spatial dimensions by half (takes the max in each 2x2 region)
-        # This helps reduce computation and provides translation invariance
-        # Applied after each convolutional block:
-        #   After pool1: 32 x 14 x 14 (from 32 x 28 x 28)
-        #   After pool2: 64 x 7 x 7   (from 64 x 14 x 14)
-        self.pool = nn.MaxPool2d(
-            kernel_size=2,      # Look at 2x2 regions
-            stride=2            # Move 2 pixels at a time (no overlap)
-        )
-
-        # ============================================================
-        # FULLY CONNECTED LAYER 1
-        # ============================================================
-        # After two rounds of convolution + pooling, our feature maps are 64 x 7 x 7
-        # We flatten these into a single vector: 64 * 7 * 7 = 3136 values
-        # This layer maps those 3136 features down to 128 neurons
-        self.fc1 = nn.Linear(
-            in_features=64 * 7 * 7,   # Flattened feature map size
-            out_features=128           # Compressed representation
-        )
-
-        # ============================================================
-        # BATCH NORMALIZATION 3 (after fc1)
-        # ============================================================
-        # Normalizes the 128-dimensional FC output before activation.
-        # BatchNorm1d is used for 1D (non-spatial) tensors.
-        self.bn3 = nn.BatchNorm1d(
-            num_features=128    # One parameter per neuron
-        )
-
-        # ============================================================
-        # DROPOUT LAYER
-        # ============================================================
-        # Randomly sets 25% of neurons to zero during training
-        # This prevents overfitting by forcing the network to not rely
-        # too heavily on any single neuron
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
+        self.fc1 = nn.Linear(64 * 7 * 7, 128)
+        self.bn3 = nn.BatchNorm1d(128)
         self.dropout = nn.Dropout(p=0.25)
-
-        # ============================================================
-        # FULLY CONNECTED LAYER 2 (OUTPUT)
-        # ============================================================
-        # Maps the 128 features to 10 output classes (digits 0-9)
-        # The output values are raw scores (logits) for each digit class
-        self.fc2 = nn.Linear(
-            in_features=128,    # Input from previous FC layer
-            out_features=10     # One output per digit (0-9)
-        )
+        self.fc2 = nn.Linear(128, 10)
 
     def forward(self, x):
         """
-        Define the forward pass of the network.
-
-        This method specifies how input data flows through the layers
-        to produce the final output predictions.
+        Forward pass: Conv1 -> BN -> ReLU -> Pool -> Conv2 -> BN -> ReLU -> Pool -> FC.
 
         Args:
-            x (torch.Tensor): Input tensor of shape (batch_size, 1, 28, 28)
-                              representing a batch of grayscale digit images.
+            x (torch.Tensor): Input tensor of shape (batch_size, 1, 28, 28).
 
         Returns:
-            torch.Tensor: Output tensor of shape (batch_size, 10) containing
-                         raw scores (logits) for each of the 10 digit classes.
+            torch.Tensor: Output logits of shape (batch_size, 10).
         """
-        # --- Convolutional Block 1 ---
-        # Apply first convolution, batch norm, ReLU activation, then max pooling
-        # Shape: (batch, 1, 28, 28) -> (batch, 32, 28, 28) -> (batch, 32, 14, 14)
         x = self.pool(F.relu(self.bn1(self.conv1(x))))
-
-        # --- Convolutional Block 2 ---
-        # Apply second convolution, batch norm, ReLU activation, then max pooling
-        # Shape: (batch, 32, 14, 14) -> (batch, 64, 14, 14) -> (batch, 64, 7, 7)
         x = self.pool(F.relu(self.bn2(self.conv2(x))))
-
-        # --- Flatten ---
-        # Reshape the 3D feature maps into a 1D vector for the fully connected layers
-        # Shape: (batch, 64, 7, 7) -> (batch, 3136)
         x = x.view(-1, 64 * 7 * 7)
-
-        # --- Fully Connected Block ---
-        # Apply first FC layer with batch norm and ReLU activation
-        # Shape: (batch, 3136) -> (batch, 128)
         x = F.relu(self.bn3(self.fc1(x)))
-
-        # Apply dropout (only active during training, automatically disabled in eval mode)
         x = self.dropout(x)
-
-        # --- Output Layer ---
-        # Apply second FC layer to get final class scores
-        # Shape: (batch, 128) -> (batch, 10)
         x = self.fc2(x)
+        return x
+
+
+# =============================================================================
+# RESIDUAL BLOCK
+# =============================================================================
+
+class ResidualBlock(nn.Module):
+    """
+    A single residual block with skip connection.
+
+    Implements the fundamental building block of ResNet:
+
+        input ──┬── Conv -> BN -> ReLU -> Conv -> BN ──┬── (+) -> ReLU -> output
+                │                                       │
+                └───────── shortcut (identity or 1x1) ──┘
+
+    When the input and output have the same dimensions, the skip connection
+    is a simple identity (no parameters). When dimensions change (e.g.,
+    doubling channels or halving spatial size), a 1x1 convolution adapts
+    the shortcut to match.
+
+    Args:
+        in_channels (int): Number of input feature map channels.
+        out_channels (int): Number of output feature map channels.
+        stride (int): Stride for the first convolution (use 2 to downsample).
+    """
+
+    def __init__(self, in_channels, out_channels, stride=1):
+        super(ResidualBlock, self).__init__()
+
+        # --- Main path (two convolutions with batch norm) ---
+        self.conv1 = nn.Conv2d(
+            in_channels, out_channels,
+            kernel_size=3, stride=stride, padding=1, bias=False
+        )
+        self.bn1 = nn.BatchNorm2d(out_channels)
+
+        self.conv2 = nn.Conv2d(
+            out_channels, out_channels,
+            kernel_size=3, stride=1, padding=1, bias=False
+        )
+        self.bn2 = nn.BatchNorm2d(out_channels)
+
+        # --- Shortcut connection ---
+        # If dimensions change (channel count or spatial size), use a 1x1 conv
+        # to project the input to the correct dimensions for addition.
+        # Otherwise, the shortcut is just the identity (no-op).
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(
+                    in_channels, out_channels,
+                    kernel_size=1, stride=stride, bias=False
+                ),
+                nn.BatchNorm2d(out_channels)
+            )
+
+    def forward(self, x):
+        """
+        Forward pass with skip connection.
+
+        The input is added to the output of the conv layers BEFORE the
+        final ReLU activation. This is the "pre-activation" variant that
+        allows unimpeded gradient flow through the skip path.
+
+        Args:
+            x (torch.Tensor): Input feature maps.
+
+        Returns:
+            torch.Tensor: Output feature maps (same spatial size if stride=1,
+                         halved if stride=2).
+        """
+        # Main path: Conv -> BN -> ReLU -> Conv -> BN
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
+
+        # Skip connection: add the (possibly projected) input
+        out += self.shortcut(x)
+
+        # Final activation after addition
+        out = F.relu(out)
+
+        return out
+
+
+# =============================================================================
+# RESNET CNN — DEEPER ARCHITECTURE WITH SKIP CONNECTIONS
+# =============================================================================
+
+class ResNetCNN(nn.Module):
+    """
+    ResNet-style CNN for digit classification.
+
+    A deeper architecture (14 conv layers) that uses residual skip connections
+    to enable effective training despite increased depth. Designed for MNIST
+    (28x28 grayscale images) with appropriate sizing.
+
+    Architecture Summary:
+        Input (1x28x28)
+        -> Initial Conv(1→32, 3x3) -> BN -> ReLU              [32x28x28]
+        -> ResBlock(32→32) x2                                  [32x28x28]
+        -> ResBlock(32→64, stride=2) + ResBlock(64→64)         [64x14x14]
+        -> ResBlock(64→128, stride=2) + ResBlock(128→128)      [128x7x7]
+        -> Global Average Pooling                              [128]
+        -> FC(128→10)                                          [10]
+
+    Key Differences from Standard CNN:
+        - 6 residual blocks (12 conv layers) vs 2 plain conv layers
+        - Skip connections prevent vanishing gradients in deeper network
+        - Global average pooling instead of flatten (fewer parameters)
+        - No dropout needed (ResNet + BN provides sufficient regularization)
+
+    Total Parameters: ~295K (actually FEWER than the plain CNN's 422K,
+    because global average pooling eliminates the large FC(3136→128) layer)
+    """
+
+    def __init__(self):
+        """
+        Initialize the ResNet CNN layers.
+
+        Structure:
+        - Initial convolution to expand from 1 channel to 32
+        - 3 stages of 2 residual blocks each (32, 64, 128 channels)
+        - Global average pooling to collapse spatial dimensions
+        - Single fully connected layer for classification
+        """
+        super(ResNetCNN, self).__init__()
+
+        # ============================================================
+        # INITIAL CONVOLUTION
+        # ============================================================
+        # Expands the single grayscale channel to 32 feature maps.
+        # This is NOT a residual block — just a standard conv to set up
+        # the channel dimension for the residual blocks that follow.
+        self.conv_initial = nn.Conv2d(
+            in_channels=1, out_channels=32,
+            kernel_size=3, stride=1, padding=1, bias=False
+        )
+        self.bn_initial = nn.BatchNorm2d(32)
+
+        # ============================================================
+        # STAGE 1: 32 channels, 28x28 spatial (no downsampling)
+        # ============================================================
+        # Two residual blocks at 32 channels.
+        # Input and output dimensions match → identity shortcuts.
+        self.stage1 = nn.Sequential(
+            ResidualBlock(32, 32, stride=1),
+            ResidualBlock(32, 32, stride=1),
+        )
+
+        # ============================================================
+        # STAGE 2: 64 channels, 14x14 spatial (downsample 2x)
+        # ============================================================
+        # First block uses stride=2 to halve spatial dimensions.
+        # Also doubles channels: 32 → 64 (requires 1x1 shortcut).
+        self.stage2 = nn.Sequential(
+            ResidualBlock(32, 64, stride=2),   # 32→64, 28x28→14x14
+            ResidualBlock(64, 64, stride=1),   # 64→64, 14x14→14x14
+        )
+
+        # ============================================================
+        # STAGE 3: 128 channels, 7x7 spatial (downsample 2x)
+        # ============================================================
+        # First block uses stride=2 to halve spatial dimensions again.
+        # Doubles channels: 64 → 128.
+        self.stage3 = nn.Sequential(
+            ResidualBlock(64, 128, stride=2),  # 64→128, 14x14→7x7
+            ResidualBlock(128, 128, stride=1), # 128→128, 7x7→7x7
+        )
+
+        # ============================================================
+        # GLOBAL AVERAGE POOLING
+        # ============================================================
+        # Collapses each 7x7 feature map into a single value by averaging.
+        # This is more parameter-efficient than flattening (128 vs 128*7*7=6272).
+        # Also provides translation invariance and reduces overfitting.
+        self.global_avg_pool = nn.AdaptiveAvgPool2d((1, 1))
+
+        # ============================================================
+        # CLASSIFICATION HEAD
+        # ============================================================
+        # Maps the 128-dimensional pooled features to 10 digit classes.
+        # No dropout needed — BatchNorm + skip connections provide
+        # sufficient regularization for MNIST.
+        self.fc = nn.Linear(128, 10)
+
+    def forward(self, x):
+        """
+        Forward pass through the ResNet CNN.
+
+        Data flow:
+            (batch, 1, 28, 28) → initial conv → stage1 → stage2 → stage3
+            → global avg pool → flatten → FC → (batch, 10)
+
+        Args:
+            x (torch.Tensor): Input tensor of shape (batch_size, 1, 28, 28).
+
+        Returns:
+            torch.Tensor: Output logits of shape (batch_size, 10).
+        """
+        # Initial convolution: (batch, 1, 28, 28) → (batch, 32, 28, 28)
+        x = F.relu(self.bn_initial(self.conv_initial(x)))
+
+        # Residual stages
+        x = self.stage1(x)   # (batch, 32, 28, 28) → (batch, 32, 28, 28)
+        x = self.stage2(x)   # (batch, 32, 28, 28) → (batch, 64, 14, 14)
+        x = self.stage3(x)   # (batch, 64, 14, 14) → (batch, 128, 7, 7)
+
+        # Global average pooling: (batch, 128, 7, 7) → (batch, 128, 1, 1)
+        x = self.global_avg_pool(x)
+
+        # Flatten: (batch, 128, 1, 1) → (batch, 128)
+        x = x.view(x.size(0), -1)
+
+        # Classification: (batch, 128) → (batch, 10)
+        x = self.fc(x)
 
         return x

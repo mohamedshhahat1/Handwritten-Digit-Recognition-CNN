@@ -703,7 +703,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~Arabic language support~~
 - [x] ~~Learning rate scheduling (cosine annealing, warm restarts)~~
 - [x] ~~Batch normalization in the CNN~~
-- [ ] ResNet-style skip connections for deeper architectures
+- [x] ~~ResNet-style skip connections for deeper architectures~~
 - [ ] Model quantization for edge deployment
 - [ ] ONNX export for cross-platform inference
 - [ ] Real handwriting dataset training (IAM, RIMES)
