@@ -134,6 +134,7 @@ Handwritten-Digit-Recognition-CNN/
 ├── predict.py                     # 🔮 Single-image prediction CLI
 ├── compare_models.py              # 🧠 CNN vs MLP benchmarking
 ├── generate_report.py             # 📄 PDF report generation
+├── quantize.py                    # ⚡ Model quantization for edge deployment
 │
 ├── Dockerfile                     # 🐳 Container build
 ├── docker-compose.yml             # 🐳 Compose orchestration
@@ -235,6 +236,13 @@ python main.py --mode predict --image path/to/digit.png --verbose
 
 # Run demo on random test images
 python main.py --mode demo
+
+# Quantize model for edge deployment
+python main.py --mode quantize
+
+# Quantize with static method and compare all
+python main.py --mode quantize --quantize-mode static
+python main.py --mode quantize --compare
 ```
 
 ---
@@ -428,6 +436,37 @@ Creates a professional multi-page PDF at `outputs/training_report.pdf` including
 - Confusion matrix
 - Per-class metrics
 - Configuration summary
+
+---
+
+### ⚡ Model Quantization (Edge Deployment)
+
+```bash
+# Dynamic quantization (quick, no calibration needed)
+python quantize.py
+
+# Static quantization (maximum compression)
+python quantize.py --mode static
+
+# Quantization-aware training (best accuracy)
+python quantize.py --mode qat --epochs 3
+
+# Quantize the ResNet model
+python quantize.py --model resnet
+
+# Compare all methods side-by-side
+python quantize.py --compare
+```
+
+Reduces model size for deployment on edge devices (mobile, Raspberry Pi, etc.):
+
+| Method | Accuracy Loss | Size Reduction | Speedup |
+|--------|:---:|:---:|:---:|
+| Dynamic | 0.00% | 3.5× smaller | 1.7× faster |
+| Static | ~0.1–0.5% | ~4× smaller | 2–3× faster |
+| QAT | ~0% | ~4× smaller | 2–3× faster |
+
+Output: `saved_models/mnist_cnn_quantized_{dynamic,static,qat}.pth`
 
 ---
 

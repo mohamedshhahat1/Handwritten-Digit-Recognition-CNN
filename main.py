@@ -34,6 +34,7 @@ def print_banner():
     |                                                          |
     |   Features: TensorBoard | Early Stopping | Augmentation  |
     |             Model Versioning | Config System              |
+    |             LR Scheduling | Quantization                 |
     ============================================================
     """
     print(banner)
@@ -56,6 +57,8 @@ Examples:
   %(prog)s --mode evaluate                 Evaluate model on MNIST test set
   %(prog)s --mode predict --image img.png  Predict digit in an image file
   %(prog)s --mode demo                     Run demo on random test images
+  %(prog)s --mode quantize                 Quantize model for edge deployment
+  %(prog)s --mode quantize --quantize-mode static  Static quantization
         """
     )
 
@@ -64,8 +67,8 @@ Examples:
         '--mode',
         type=str,
         required=True,
-        choices=['train', 'evaluate', 'predict', 'demo'],
-        help="Mode: 'train', 'evaluate', 'predict', or 'demo'."
+        choices=['train', 'evaluate', 'predict', 'demo', 'quantize'],
+        help="Mode: 'train', 'evaluate', 'predict', 'demo', or 'quantize'."
     )
 
     # Image path for predict mode
@@ -108,6 +111,18 @@ Examples:
     parser.add_argument(
         '--model-path', type=str, default=None,
         help="Path to a specific model file to use."
+    )
+
+    # Quantization options
+    parser.add_argument(
+        '--quantize-mode', type=str, default='dynamic',
+        choices=['dynamic', 'static', 'qat'],
+        help="Quantization method: 'dynamic', 'static', or 'qat' (default: dynamic)."
+    )
+
+    parser.add_argument(
+        '--compare', action='store_true',
+        help="Compare all quantization methods (for 'quantize' mode)."
     )
 
     return parser
@@ -210,6 +225,31 @@ def run_demo(args):
     demo_predict_random_samples(num_samples=5)
 
 
+def run_quantize(args):
+    """Handle the 'quantize' mode."""
+    from quantize import (
+        load_trained_model, get_test_loader, get_calibration_loader,
+        get_train_loader, quantize_dynamic, quantize_static, quantize_qat,
+        evaluate_accuracy, measure_inference_time, get_model_size,
+        save_quantized_model, print_comparison_report, run_comparison
+    )
+
+    print("[MODE] Quantizing model for edge deployment...")
+    print(f"  Method: {args.quantize_mode}")
+    print()
+
+    # Load model
+    model = load_trained_model(model_type="cnn", model_path=args.model_path)
+    test_loader = get_test_loader()
+
+    if args.compare:
+        run_comparison(model, "cnn", test_loader, qat_epochs=args.epochs or 3)
+    else:
+        from quantize import run_single
+        run_single(model, "cnn", args.quantize_mode, test_loader,
+                   qat_epochs=args.epochs or 3)
+
+
 # =============================================================================
 # MAIN ENTRY POINT
 # =============================================================================
@@ -226,6 +266,7 @@ def main():
         'evaluate': run_evaluation,
         'predict': run_prediction,
         'demo': run_demo,
+        'quantize': run_quantize,
     }
 
     handler = mode_handlers[args.mode]
