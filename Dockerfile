@@ -1,12 +1,12 @@
 # Dockerfile for Handwritten Digit Recognition CNN
-# Multi-stage optimized build for FastAPI serving
+# Auto-trains on first run if no model exists, then serves the API.
 
 FROM python:3.11-slim
 
 # Labels
-LABEL maintainer="digit-recognition-team"
-LABEL description="Handwritten Digit Recognition CNN with FastAPI API and Web UI"
-LABEL version="1.0"
+LABEL maintainer="mohamedshhahat1"
+LABEL description="Handwritten Digit & Text Recognition with FastAPI, Web UI, and auto-training"
+LABEL version="2.0"
 
 # Set working directory
 WORKDIR /app
@@ -30,8 +30,14 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the entire project
 COPY . .
 
+# Make entrypoint executable
+RUN chmod +x docker-entrypoint.sh
+
+# Create model directory
+RUN mkdir -p saved_models
+
 # Expose the API port
 EXPOSE 8000
 
-# Run the FastAPI application
-CMD ["uvicorn", "api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Use entrypoint script (auto-trains if needed, then starts server)
+ENTRYPOINT ["./docker-entrypoint.sh"]
