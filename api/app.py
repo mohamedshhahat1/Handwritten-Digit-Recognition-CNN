@@ -277,17 +277,22 @@ async def serve_ocr():
 ocr_model = None
 ocr_charset = None
 ocr_loaded = False
+ocr_language_model = None
 
 
 def load_ocr_model():
-    """Load the CRNN OCR model if available."""
-    global ocr_model, ocr_charset, ocr_loaded
+    """Load the CRNN OCR model and language model if available."""
+    global ocr_model, ocr_charset, ocr_loaded, ocr_language_model
 
     try:
         from model.crnn_model import CRNN
         from model.ocr_utils import OCRCharset
+        from model.language_model import LanguageModel
 
         ocr_charset = OCRCharset()
+
+        # Initialize language model for post-processing
+        ocr_language_model = LanguageModel(language='mixed')
 
         model_path = os.path.join(PROJECT_ROOT, "saved_models", "ocr_crnn_best.pth")
         if not os.path.exists(model_path):
@@ -422,7 +427,7 @@ async def predict_ocr_base64(request: OCRBase64Request):
     return result
 
 
-def run_ocr_inference(tensor, decode_method='greedy', beam_width=10):
+def run_ocr_inference(tensor, decode_method='greedy', beam_width=10, use_lm=True):
     """
     Run OCR inference on a preprocessed image tensor.
 
@@ -430,6 +435,7 @@ def run_ocr_inference(tensor, decode_method='greedy', beam_width=10):
         tensor (torch.Tensor): Shape (1, 1, 32, W).
         decode_method (str): 'greedy' or 'beam_search'.
         beam_width (int): Beam width for beam search (default: 10).
+        use_lm (bool): Whether to apply language model (default: True).
 
     Returns:
         dict: {"text": str, "confidence": float, "model_loaded": True}
@@ -444,9 +450,11 @@ def run_ocr_inference(tensor, decode_method='greedy', beam_width=10):
         max_probs = probs.max(dim=2)[0]  # Max prob at each timestep
         confidence = float(max_probs.mean())
 
-        # Decode with CTC (greedy or beam search)
+        # Decode with CTC (optionally with language model)
+        lm = ocr_language_model if use_lm else None
         texts = ctc_decode_batch(
-            output, ocr_charset, method=decode_method, beam_width=beam_width
+            output, ocr_charset, method=decode_method, beam_width=beam_width,
+            language_model=lm, lm_weight=0.3
         )
         text = texts[0] if texts else ""
 

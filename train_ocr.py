@@ -25,11 +25,12 @@ from model.crnn_model import CRNN
 from model.ocr_utils import OCRCharset, ctc_decode_batch, ctc_collate_fn, compute_cer
 from model.ocr_dataset import SyntheticOCRDataset
 from model.iam_dataset import get_ocr_dataset, check_dataset_available
+from model.language_model import LanguageModel
 
 
 def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
               dataset_name='synthetic', data_dir=None, decode_method='greedy',
-              beam_width=10):
+              beam_width=10, use_lm=False, lm_weight=0.3):
     """
     Train the CRNN OCR model.
 
@@ -42,6 +43,8 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
         data_dir (str): Root directory for real datasets (IAM/RIMES).
         decode_method (str): CTC decoding method: 'greedy' or 'beam_search'.
         beam_width (int): Beam width for beam search decoding (default: 10).
+        use_lm (bool): Whether to use language model for post-processing.
+        lm_weight (float): Language model weight for joint decoding (default: 0.3).
     """
     print("=" * 60)
     print("  OCR TRAINING — CRNN (CNN + BiLSTM + CTC)")
@@ -146,8 +149,13 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
     decode_info = f"Decode: {decode_method}"
     if decode_method == 'beam_search':
         decode_info += f" (beam_width={beam_width})"
+    if use_lm:
+        decode_info += f" + LM (weight={lm_weight})"
     print(decode_info)
     print("-" * 60)
+
+    # Initialize language model if requested
+    lm = LanguageModel(language='mixed') if use_lm else None
 
     for epoch in range(1, epochs + 1):
         # --- Training ---
@@ -190,7 +198,8 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
 
                 outputs = model(images)
                 predicted_texts = ctc_decode_batch(
-                    outputs, charset, method=decode_method, beam_width=beam_width
+                    outputs, charset, method=decode_method, beam_width=beam_width,
+                    language_model=lm, lm_weight=lm_weight
                 )
 
                 # Decode ground truth labels
@@ -280,6 +289,10 @@ Examples:
                         help="CTC decoding method: 'greedy' or 'beam_search' (default: greedy)")
     parser.add_argument("--beam-width", type=int, default=10,
                         help="Beam width for beam search decoding (default: 10)")
+    parser.add_argument("--lm", action="store_true",
+                        help="Enable language model for OCR post-processing/joint decoding")
+    parser.add_argument("--lm-weight", type=float, default=0.3,
+                        help="Language model weight for joint CTC+LM decoding (default: 0.3)")
     args = parser.parse_args()
 
     train_ocr(
@@ -291,4 +304,6 @@ Examples:
         data_dir=args.data_dir,
         decode_method=args.decode,
         beam_width=args.beam_width,
+        use_lm=args.lm,
+        lm_weight=args.lm_weight,
     )

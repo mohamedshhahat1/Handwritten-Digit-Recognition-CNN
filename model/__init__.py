@@ -21,6 +21,7 @@ from model.mlp_model import MLP
 from model.crnn_model import CRNN
 from model.ocr_utils import OCRCharset
 from model.iam_dataset import IAMDataset, RIMESDataset, get_ocr_dataset
+from model.language_model import LanguageModel
 
 # Alias for backward compatibility
 MNISTNet = CNN
@@ -30,4 +31,5 @@ __all__ = [
     "CRNN", "OCRCharset",
     "MLP", "MNISTNet",
     "IAMDataset", "RIMESDataset", "get_ocr_dataset",
+    "LanguageModel",
 ]

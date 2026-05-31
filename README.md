@@ -110,6 +110,7 @@ Handwritten-Digit-Recognition-CNN/
 │   ├── crnn_model.py              # CRNN (CNN + BiLSTM) for OCR
 │   ├── ocr_dataset.py             # Synthetic OCR data generator
 │   ├── iam_dataset.py             # IAM & RIMES real handwriting datasets
+│   ├── language_model.py          # Language model for OCR post-processing
 │   └── ocr_utils.py               # Charset, CTC decoding, CER/WER metrics
 │
 ├── data/                          # Data loading & preprocessing
@@ -824,7 +825,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~ONNX export for cross-platform inference~~
 - [x] ~~Real handwriting dataset training (IAM, RIMES)~~
 - [x] ~~Beam search CTC decoding for better OCR accuracy~~
-- [ ] Language model integration for OCR post-processing
+- [x] ~~Language model integration for OCR post-processing~~
 
 ---
 

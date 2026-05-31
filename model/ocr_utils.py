@@ -300,11 +300,12 @@ def _beam_update(beams_dict, prefix, log_prob, is_blank):
         beams_dict[prefix] = (log_pb, _log_add(log_pnb, log_prob))
 
 
-def ctc_decode_batch(log_probs, charset, method='greedy', beam_width=10):
+def ctc_decode_batch(log_probs, charset, method='greedy', beam_width=10,
+                     language_model=None, lm_weight=0.3):
     """
     Decode a batch of CTC outputs to text strings.
 
-    Supports both greedy and beam search decoding methods.
+    Supports greedy decoding, beam search, and beam search with language model.
 
     Args:
         log_probs (torch.Tensor): Shape (seq_len, batch, num_classes).
@@ -314,6 +315,12 @@ def ctc_decode_batch(log_probs, charset, method='greedy', beam_width=10):
             - 'beam_search': Slower but more accurate, explores multiple paths.
         beam_width (int): Beam width for beam search (default: 10).
             Ignored if method='greedy'.
+        language_model: Optional LanguageModel instance for post-processing
+            or joint decoding. If provided with beam_search, scores are combined.
+            If provided with greedy, applies post-processing correction.
+        lm_weight (float): Weight of language model score relative to CTC score.
+            Combined score = CTC_score + lm_weight * LM_score. Default: 0.3.
+            Higher values trust the language model more.
 
     Returns:
         list[str]: Decoded text for each sample in the batch.
@@ -326,15 +333,120 @@ def ctc_decode_batch(log_probs, charset, method='greedy', beam_width=10):
         sample_preds = log_probs[:, b, :]
 
         if method == 'beam_search':
-            indices = ctc_decode_beam_search(sample_preds, beam_width=beam_width)
+            if language_model is not None:
+                # Joint CTC + LM beam search
+                indices = ctc_decode_beam_search_lm(
+                    sample_preds, charset, language_model,
+                    beam_width=beam_width, lm_weight=lm_weight
+                )
+            else:
+                indices = ctc_decode_beam_search(sample_preds, beam_width=beam_width)
         else:
             indices = ctc_decode_greedy(sample_preds)
 
         # Convert to text
         text = charset.decode(indices)
+
+        # Apply LM post-processing correction (for greedy or as a fallback)
+        if language_model is not None and method == 'greedy':
+            text = language_model.correct_text(text)
+
         texts.append(text)
 
     return texts
+
+
+def ctc_decode_beam_search_lm(log_probs, charset, language_model,
+                              beam_width=10, lm_weight=0.3, blank_id=0):
+    """
+    Beam search CTC decoding with language model integration.
+
+    Combines the CTC acoustic score with a character-level language model
+    score during beam search. This biases the decoder toward linguistically
+    plausible character sequences.
+
+    Combined score at each step:
+        score = CTC_log_prob + lm_weight * LM_log_prob(char | context)
+
+    Args:
+        log_probs (torch.Tensor or np.ndarray): Shape (seq_len, num_classes).
+        charset (OCRCharset): Character set for decoding.
+        language_model: LanguageModel instance with score_char() method.
+        beam_width (int): Number of beams to maintain.
+        lm_weight (float): LM influence (0=no LM, 1=equal to CTC).
+        blank_id (int): CTC blank token index.
+
+    Returns:
+        list[int]: Best decoded character indices.
+    """
+    if isinstance(log_probs, torch.Tensor):
+        log_probs_np = log_probs.cpu().numpy()
+    else:
+        log_probs_np = log_probs
+
+    seq_len, num_classes = log_probs_np.shape
+
+    NEG_INF = float('-inf')
+
+    # Beams: {prefix_tuple: (log_prob_blank, log_prob_non_blank)}
+    beams = {(): (0.0, NEG_INF)}
+
+    for t in range(seq_len):
+        new_beams = {}
+
+        for prefix, (log_pb, log_pnb) in beams.items():
+            log_p_total = _log_add(log_pb, log_pnb)
+
+            for c in range(num_classes):
+                log_p_c = log_probs_np[t, c]
+
+                if c == blank_id:
+                    new_log_pb = log_p_total + log_p_c
+                    _beam_update(new_beams, prefix, new_log_pb, is_blank=True)
+                else:
+                    # Get LM score for this character
+                    # Convert prefix indices to text for LM context
+                    context_text = charset.decode(list(prefix))
+                    char_text = charset.decode([c])
+                    lm_score = language_model.score_char(context_text, char_text)
+
+                    # Combined CTC + LM score
+                    combined_log_p = log_p_c + lm_weight * lm_score
+
+                    if prefix and prefix[-1] == c:
+                        # Same char: split into from-blank and from-non-blank
+                        new_log_pnb_from_blank = log_pb + combined_log_p
+                        _beam_update(new_beams, prefix + (c,),
+                                     new_log_pnb_from_blank, is_blank=False)
+
+                        new_log_pnb_merge = log_pnb + combined_log_p
+                        _beam_update(new_beams, prefix,
+                                     new_log_pnb_merge, is_blank=False)
+                    else:
+                        new_log_pnb = log_p_total + combined_log_p
+                        _beam_update(new_beams, prefix + (c,),
+                                     new_log_pnb, is_blank=False)
+
+        # Prune to top beam_width
+        scored = [
+            (prefix, log_pb, log_pnb, _log_add(log_pb, log_pnb))
+            for prefix, (log_pb, log_pnb) in new_beams.items()
+        ]
+        scored.sort(key=lambda x: x[3], reverse=True)
+        scored = scored[:beam_width]
+
+        beams = {prefix: (log_pb, log_pnb)
+                 for prefix, log_pb, log_pnb, _ in scored}
+
+    if not beams:
+        return []
+
+    # Final scoring: add LM end-of-sequence bonus
+    best_prefix = max(
+        beams.keys(),
+        key=lambda p: _log_add(beams[p][0], beams[p][1])
+    )
+    return list(best_prefix)
 
 
 def ctc_collate_fn(batch):
