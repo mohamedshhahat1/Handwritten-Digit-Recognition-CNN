@@ -15,4 +15,11 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 300s  # Allow up to 5 min for first-run training
+      start_period: 300s
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
