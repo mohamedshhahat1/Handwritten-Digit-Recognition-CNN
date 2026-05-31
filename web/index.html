@@ -333,7 +333,7 @@
                 document.getElementById('step-input').classList.add('active');
                 let base64;
                 if (currentMode === 'upload' && uploadedImageBase64) { base64 = uploadedImageBase64; }
-                else { base64 = canvas.toDataURL('image/png').split(',')[1]; }
+                else { base64 = getCroppedCanvasBase64(); }
 
                 await sleep(80);
                 document.getElementById('step-preprocess').classList.add('active');
@@ -377,6 +377,72 @@
         }
 
         function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        /**
+         * Auto-crop the drawn digit, center it in a square, and return as base64.
+         * This ensures the digit is properly sized regardless of canvas dimensions.
+         * Mimics MNIST preprocessing: digit centered in 28x28 with padding.
+         */
+        function getCroppedCanvasBase64() {
+            const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const pixels = imgData.data;
+
+            // Find bounding box of non-black pixels
+            let top = canvas.height, bottom = 0, left = canvas.width, right = 0;
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < canvas.width; x++) {
+                    const idx = (y * canvas.width + x) * 4;
+                    // Check if pixel is non-black (any channel > 20)
+                    if (pixels[idx] > 20 || pixels[idx+1] > 20 || pixels[idx+2] > 20) {
+                        if (y < top) top = y;
+                        if (y > bottom) bottom = y;
+                        if (x < left) left = x;
+                        if (x > right) right = x;
+                    }
+                }
+            }
+
+            // If nothing drawn, return full canvas
+            if (top >= bottom || left >= right) {
+                return canvas.toDataURL('image/png').split(',')[1];
+            }
+
+            // Add padding (10% of bounding box size)
+            const bw = right - left;
+            const bh = bottom - top;
+            const pad = Math.max(bw, bh) * 0.15;
+            top = Math.max(0, top - pad);
+            bottom = Math.min(canvas.height, bottom + pad);
+            left = Math.max(0, left - pad);
+            right = Math.min(canvas.width, right + pad);
+
+            // Crop the digit
+            const cropW = right - left;
+            const cropH = bottom - top;
+
+            // Create a square canvas (like MNIST) and center the digit
+            const size = Math.max(cropW, cropH);
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width = 280;
+            outCanvas.height = 280;
+            const outCtx = outCanvas.getContext('2d');
+
+            // Black background
+            outCtx.fillStyle = '#000';
+            outCtx.fillRect(0, 0, 280, 280);
+
+            // Scale digit to fit ~200px (with margin) and center
+            const scale = Math.min(200 / cropW, 200 / cropH);
+            const sw = cropW * scale;
+            const sh = cropH * scale;
+            const dx = (280 - sw) / 2;
+            const dy = (280 - sh) / 2;
+
+            outCtx.drawImage(canvas, left, top, cropW, cropH, dx, dy, sw, sh);
+
+            return outCanvas.toDataURL('image/png').split(',')[1];
+        }
+
         function copyText() { if (!recognizedText) return; navigator.clipboard.writeText(recognizedText).then(() => { const b = document.getElementById('copyBtn'); b.textContent = '✅ Copied!'; b.classList.add('copied'); setTimeout(() => { b.textContent = '📋 Copy'; b.classList.remove('copied'); }, 2000); }); }
         function downloadTxt() { if (!recognizedText) return; const b = new Blob([recognizedText], {type:'text/plain'}); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = 'prediction.txt'; a.click(); }
     </script>
