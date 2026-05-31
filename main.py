@@ -16,7 +16,10 @@ Usage Examples:
 """
 
 import argparse
+import os
 import sys
+
+import config
 
 
 # =============================================================================
@@ -59,6 +62,8 @@ Examples:
   %(prog)s --mode demo                     Run demo on random test images
   %(prog)s --mode quantize                 Quantize model for edge deployment
   %(prog)s --mode quantize --quantize-mode static  Static quantization
+  %(prog)s --mode export                   Export model to ONNX format
+  %(prog)s --mode export --validate        Export and validate ONNX model
         """
     )
 
@@ -67,8 +72,8 @@ Examples:
         '--mode',
         type=str,
         required=True,
-        choices=['train', 'evaluate', 'predict', 'demo', 'quantize'],
-        help="Mode: 'train', 'evaluate', 'predict', 'demo', or 'quantize'."
+        choices=['train', 'evaluate', 'predict', 'demo', 'quantize', 'export'],
+        help="Mode: 'train', 'evaluate', 'predict', 'demo', 'quantize', or 'export'."
     )
 
     # Image path for predict mode
@@ -123,6 +128,17 @@ Examples:
     parser.add_argument(
         '--compare', action='store_true',
         help="Compare all quantization methods (for 'quantize' mode)."
+    )
+
+    # ONNX export options
+    parser.add_argument(
+        '--validate', action='store_true',
+        help="Validate exported ONNX model (compare outputs, benchmark speed)."
+    )
+
+    parser.add_argument(
+        '--dynamic-batch', action='store_true',
+        help="Enable dynamic batch size in ONNX export."
     )
 
     return parser
@@ -251,6 +267,27 @@ def run_quantize(args):
                    qat_epochs=args.epochs or 3)
 
 
+def run_export(args):
+    """Handle the 'export' mode — ONNX export for cross-platform inference."""
+    from export_onnx import load_trained_model, export_to_onnx, validate_onnx
+
+    print("[MODE] Exporting model to ONNX format...")
+    print()
+
+    # Load model
+    model = load_trained_model(model_type="cnn", model_path=args.model_path)
+
+    # Determine output path
+    output_path = os.path.join(config.MODEL_DIR, "mnist_cnn.onnx")
+
+    # Export
+    export_to_onnx(model, output_path, dynamic_batch=args.dynamic_batch)
+
+    # Validate if requested
+    if args.validate:
+        validate_onnx(output_path, model)
+
+
 # =============================================================================
 # MAIN ENTRY POINT
 # =============================================================================
@@ -268,6 +305,7 @@ def main():
         'predict': run_prediction,
         'demo': run_demo,
         'quantize': run_quantize,
+        'export': run_export,
     }
 
     handler = mode_handlers[args.mode]

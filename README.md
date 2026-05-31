@@ -135,6 +135,7 @@ Handwritten-Digit-Recognition-CNN/
 ├── compare_models.py              # 🧠 CNN vs MLP benchmarking
 ├── generate_report.py             # 📄 PDF report generation
 ├── quantize.py                    # ⚡ Model quantization for edge deployment
+├── export_onnx.py                 # 🔄 ONNX export for cross-platform inference
 │
 ├── Dockerfile                     # 🐳 Container build
 ├── docker-compose.yml             # 🐳 Compose orchestration
@@ -470,6 +471,51 @@ Output: `saved_models/mnist_cnn_quantized_{dynamic,static,qat}.pth`
 
 ---
 
+### 🔄 ONNX Export (Cross-Platform Deployment)
+
+```bash
+# Export CNN to ONNX
+python export_onnx.py
+
+# Export ResNet model
+python export_onnx.py --model resnet
+
+# Export with validation (compare PyTorch vs ONNX outputs)
+python export_onnx.py --validate
+
+# Enable dynamic batch size
+python export_onnx.py --dynamic-batch
+
+# Via main.py
+python main.py --mode export
+python main.py --mode export --validate
+```
+
+Deploy the exported `.onnx` model on any platform:
+
+| Platform | Runtime |
+|----------|---------|
+| Desktop/Server | ONNX Runtime (C++, Python, C#, Java) |
+| NVIDIA GPU | TensorRT |
+| Intel CPU/GPU | OpenVINO |
+| Apple devices | CoreML (via onnx-coreml) |
+| Android/iOS | ONNX Runtime Mobile |
+| Web browsers | ONNX.js / ort-web |
+
+**Inference example (Python):**
+```python
+import onnxruntime as ort
+import numpy as np
+
+session = ort.InferenceSession("saved_models/mnist_cnn.onnx")
+result = session.run(None, {"input": image_array})  # image: (1, 1, 28, 28) float32
+predicted_digit = np.argmax(result[0])
+```
+
+Output: `saved_models/mnist_{cnn,resnet}.onnx`
+
+---
+
 ### 📡 TensorBoard
 
 ```bash
@@ -744,7 +790,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~Batch normalization in the CNN~~
 - [x] ~~ResNet-style skip connections for deeper architectures~~
 - [x] ~~Model quantization for edge deployment~~
-- [ ] ONNX export for cross-platform inference
+- [x] ~~ONNX export for cross-platform inference~~
 - [ ] Real handwriting dataset training (IAM, RIMES)
 - [ ] Beam search CTC decoding for better OCR accuracy
 - [ ] Language model integration for OCR post-processing
