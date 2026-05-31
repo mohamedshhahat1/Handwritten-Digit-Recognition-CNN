@@ -133,6 +133,38 @@
             transform: translateY(-2px);
         }
 
+        .mode-switch {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .mode-switch a {
+            padding: 0.6rem 1.5rem;
+            border-radius: 20px;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+
+        .mode-switch a.active {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .mode-switch a:not(.active) {
+            background: rgba(255, 255, 255, 0.08);
+            color: #a0a0b0;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .mode-switch a:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+
         .results-section {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
@@ -285,6 +317,11 @@
     <div class="header">
         <h1>&#129504; Handwritten Digit Recognition</h1>
         <p>Draw a digit (0-9) on the canvas and let the CNN predict what you wrote. Powered by a Convolutional Neural Network trained on MNIST.</p>
+    </div>
+
+    <div class="mode-switch">
+        <a href="/" class="active">Digit Mode</a>
+        <a href="/ocr">OCR Mode</a>
     </div>
 
     <div class="container">
