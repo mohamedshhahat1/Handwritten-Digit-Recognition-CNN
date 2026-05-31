@@ -439,7 +439,11 @@
 
                 const digit = data.prediction !== undefined ? data.prediction : data.digit;
                 const confidence = data.confidence !== undefined ? data.confidence : null;
-                const probabilities = data.probabilities || data.predictions || [];
+                // API returns probabilities as object {"0": 0.1, ...} — convert to array
+                const rawProbs = data.probabilities || data.predictions || [];
+                const probabilities = Array.isArray(rawProbs)
+                    ? rawProbs
+                    : Object.keys(rawProbs).sort((a,b) => a-b).map(k => rawProbs[k]);
 
                 predictedDigit.textContent = digit;
 

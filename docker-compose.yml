@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   digit-recognition:
     build:
@@ -11,9 +9,6 @@ services:
       - ./saved_models:/app/saved_models
     environment:
       - PYTHONUNBUFFERED=1
-      - MODEL_PATH=/app/saved_models
-      - HOST=0.0.0.0
-      - PORT=8000
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

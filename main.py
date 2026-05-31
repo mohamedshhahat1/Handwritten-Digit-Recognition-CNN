@@ -192,7 +192,9 @@ def run_prediction(args):
     print()
 
     try:
-        predicted_digit, confidence = predict_image(args.image, model_path=args.model_path)
+        # Load model (supports custom model path)
+        model, device = load_model(model_path=args.model_path)
+        predicted_digit, confidence = predict_image(args.image, model=model, device=device)
 
         print("=" * 40)
         print("  PREDICTION RESULT")
@@ -204,7 +206,6 @@ def run_prediction(args):
 
         # Show all probabilities if verbose
         if args.verbose:
-            model, device = load_model(model_path=args.model_path)
             probs = get_all_probabilities(args.image, model, device)
             print("\n  All class probabilities:")
             for digit, prob in sorted(probs.items()):

@@ -34,6 +34,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Import config for model hyperparameters
+import config
+
 
 class CNN(nn.Module):
     """
@@ -82,8 +85,8 @@ class CNN(nn.Module):
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2)
         self.fc1 = nn.Linear(64 * 7 * 7, 128)
         self.bn3 = nn.BatchNorm1d(128)
-        self.dropout = nn.Dropout(p=0.25)
-        self.fc2 = nn.Linear(128, 10)
+        self.dropout = nn.Dropout(p=config.DROPOUT_RATE)
+        self.fc2 = nn.Linear(128, config.NUM_CLASSES)
 
     def forward(self, x):
         """
@@ -286,7 +289,7 @@ class ResNetCNN(nn.Module):
         # Maps the 128-dimensional pooled features to 10 digit classes.
         # No dropout needed — BatchNorm + skip connections provide
         # sufficient regularization for MNIST.
-        self.fc = nn.Linear(128, 10)
+        self.fc = nn.Linear(128, config.NUM_CLASSES)
 
     def forward(self, x):
         """
