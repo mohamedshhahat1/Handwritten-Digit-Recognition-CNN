@@ -16,9 +16,9 @@ echo ""
 # --- Train CNN if no model exists ---
 if [ ! -f "$CNN_MODEL" ] && [ ! -f "$MODEL_DIR/mnist_cnn.pth" ]; then
     echo "🏋️  No trained CNN model found. Training now (first run only)..."
-    echo "    This takes ~3-5 minutes on CPU."
+    echo "    This takes ~5 minutes on CPU."
     echo ""
-    python train.py --epochs 10
+    python train.py --epochs 15
     echo ""
     echo "✅ CNN training complete!"
     echo ""
@@ -29,10 +29,10 @@ fi
 # --- Train OCR if no model exists ---
 if [ ! -f "$OCR_MODEL" ]; then
     echo ""
-    echo "🔤 No trained OCR model found. Training now..."
-    echo "    This takes ~2-3 minutes on CPU."
+    echo "🔤 No trained OCR model found. Training now (English + Arabic)..."
+    echo "    This takes ~10-15 minutes on CPU."
     echo ""
-    python train_ocr.py --epochs 10 --samples 3000
+    python train_ocr.py --epochs 30 --samples 10000 --decode beam_search --lm
     echo ""
     echo "✅ OCR training complete!"
     echo ""
