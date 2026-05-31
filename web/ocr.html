@@ -26,8 +26,26 @@
         .mode-switch a.active { background: #64ffda; color: #1a1a2e; }
         .mode-switch a:not(.active) { background: #2a2a4a; color: #aaa; }
         .mode-switch a:hover:not(.active) { background: #3a3a5a; color: #fff; }
+
+        /* Tabs for Draw vs Upload */
+        .input-tabs {
+            display: flex; justify-content: center; gap: 0; margin-bottom: 0;
+        }
+        .input-tabs button {
+            padding: 10px 24px; border: 1px solid #333; background: #1e1e3a;
+            color: #888; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+            transition: all 0.2s;
+        }
+        .input-tabs button:first-child { border-radius: 8px 0 0 0; }
+        .input-tabs button:last-child { border-radius: 0 8px 0 0; }
+        .input-tabs button.active {
+            background: #0a0a1a; color: #64ffda; border-bottom-color: #0a0a1a;
+        }
+
+        /* Canvas area */
         .canvas-container {
-            background: #0a0a1a; border: 2px solid #333; border-radius: 12px;
+            background: #0a0a1a; border: 2px solid #333; border-top: none;
+            border-radius: 0 0 12px 12px;
             padding: 16px; margin-bottom: 20px; text-align: center;
         }
         canvas {
@@ -36,8 +54,55 @@
             touch-action: none;
         }
         .hint { color: #666; font-size: 0.8rem; margin-top: 8px; }
+
+        /* Drop zone */
+        .drop-zone {
+            background: #0a0a1a; border: 2px dashed #444; border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 40px 20px; margin-bottom: 20px; text-align: center;
+            transition: all 0.3s; cursor: pointer; display: none;
+        }
+        .drop-zone.active { display: block; }
+        .drop-zone.dragover {
+            border-color: #64ffda; background: rgba(100, 255, 218, 0.05);
+        }
+        .drop-zone-icon { font-size: 3rem; margin-bottom: 12px; }
+        .drop-zone-text { color: #888; font-size: 0.95rem; margin-bottom: 8px; }
+        .drop-zone-hint { color: #555; font-size: 0.8rem; }
+        .drop-zone label {
+            display: inline-block; margin-top: 12px; padding: 10px 24px;
+            background: rgba(76, 175, 80, 0.2); color: #4CAF50;
+            border: 1px solid rgba(76, 175, 80, 0.4); border-radius: 8px;
+            font-weight: 600; cursor: pointer; transition: all 0.2s;
+        }
+        .drop-zone label:hover { background: rgba(76, 175, 80, 0.3); }
+
+        /* Image preview */
+        .preview-container {
+            display: none; margin-bottom: 20px; text-align: center;
+        }
+        .preview-container.active { display: block; }
+        .preview-box {
+            background: #0a0a1a; border: 1px solid #333; border-radius: 12px;
+            padding: 16px; display: inline-block; position: relative;
+        }
+        .preview-box img {
+            max-width: 100%; max-height: 200px; border-radius: 8px;
+        }
+        .preview-remove {
+            position: absolute; top: 8px; right: 8px;
+            background: #ff4757; color: #fff; border: none; border-radius: 50%;
+            width: 28px; height: 28px; font-size: 1rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .preview-filename {
+            color: #888; font-size: 0.8rem; margin-top: 8px;
+        }
+
+        /* Buttons */
         .buttons {
             display: flex; justify-content: center; gap: 12px; margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         .btn {
             padding: 12px 28px; border: none; border-radius: 8px;
@@ -47,9 +112,9 @@
         .btn-predict:hover { background: #4fd1b0; transform: translateY(-2px); }
         .btn-clear { background: #ff4757; color: #fff; }
         .btn-clear:hover { background: #e63946; transform: translateY(-2px); }
-        .btn-upload { background: rgba(76, 175, 80, 0.2); color: #4CAF50; border: 1px solid rgba(76, 175, 80, 0.4); cursor: pointer; }
-        .btn-upload:hover { background: rgba(76, 175, 80, 0.3); transform: translateY(-2px); }
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+        /* Result box */
         .result-box {
             background: #1e1e3a; border: 1px solid #333; border-radius: 12px;
             padding: 24px; text-align: center;
@@ -57,57 +122,156 @@
         .result-label { color: #888; font-size: 0.85rem; margin-bottom: 8px; }
         .result-text {
             font-size: 2rem; font-weight: 700; color: #64ffda;
-            min-height: 50px; direction: auto; /* handles RTL for Arabic */
+            min-height: 50px; direction: auto;
+            word-wrap: break-word; user-select: all;
         }
         .result-confidence { color: #888; margin-top: 8px; font-size: 0.9rem; }
+
+        /* Result action buttons */
+        .result-actions {
+            display: none; justify-content: center; gap: 10px;
+            margin-top: 16px; flex-wrap: wrap;
+        }
+        .result-actions.active { display: flex; }
+        .result-actions button {
+            padding: 8px 18px; border: 1px solid #444; border-radius: 6px;
+            background: #2a2a4a; color: #ccc; font-size: 0.85rem;
+            font-weight: 500; cursor: pointer; transition: all 0.2s;
+        }
+        .result-actions button:hover {
+            background: #3a3a5a; color: #fff; border-color: #64ffda;
+        }
+        .result-actions button.copied {
+            background: rgba(76, 175, 80, 0.2); color: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        /* Pipeline info */
+        .pipeline {
+            margin-top: 20px; padding: 16px; background: #1e1e3a;
+            border: 1px solid #333; border-radius: 12px;
+        }
+        .pipeline-title { color: #888; font-size: 0.8rem; margin-bottom: 10px; text-align: center; }
+        .pipeline-steps {
+            display: flex; align-items: center; justify-content: center;
+            gap: 8px; flex-wrap: wrap; font-size: 0.75rem;
+        }
+        .pipeline-step {
+            padding: 4px 10px; background: #2a2a4a; border-radius: 4px; color: #aaa;
+        }
+        .pipeline-step.active { background: rgba(100, 255, 218, 0.15); color: #64ffda; }
+        .pipeline-arrow { color: #444; }
+
         .status { text-align: center; margin-top: 12px; color: #666; font-size: 0.8rem; }
         .error { color: #ff4757; }
         .loading { color: #ffa502; }
+
         @media (max-width: 600px) {
             canvas { height: 120px; }
             h1 { font-size: 1.5rem; }
+            .btn { padding: 10px 18px; font-size: 0.9rem; }
+            .result-text { font-size: 1.5rem; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>✍️ OCR — Handwritten Text Recognition</h1>
-        <p class="subtitle">Draw a word or sentence — the AI reads it (English + Arabic + Digits)</p>
+        <p class="subtitle">Draw or upload an image — the AI reads it (English + Arabic + Digits)</p>
 
         <div class="mode-switch">
             <a href="/">Digit Mode</a>
             <a href="/ocr" class="active">OCR Mode</a>
         </div>
 
-        <div class="canvas-container">
+        <!-- Input mode tabs -->
+        <div class="input-tabs">
+            <button class="active" onclick="switchTab('draw')">✏️ Draw</button>
+            <button onclick="switchTab('upload')">📁 Upload Image</button>
+        </div>
+
+        <!-- Draw mode -->
+        <div class="canvas-container" id="drawSection">
             <canvas id="canvas" width="800" height="150"></canvas>
             <p class="hint">Write text from left to right (English) or right to left (Arabic)</p>
         </div>
 
-        <div class="buttons">
-            <button class="btn btn-predict" id="predictBtn" onclick="predict()">Recognize Text</button>
-            <button class="btn btn-clear" onclick="clearCanvas()">Clear</button>
-            <label class="btn btn-upload" for="uploadInput">Upload Image</label>
-            <input type="file" id="uploadInput" accept="image/*" style="display:none;">
+        <!-- Upload mode with drag & drop -->
+        <div class="drop-zone" id="uploadSection">
+            <div class="drop-zone-icon">📷</div>
+            <div class="drop-zone-text">Drag & drop an image here</div>
+            <div class="drop-zone-hint">or</div>
+            <label for="fileInput">Choose Image</label>
+            <input type="file" id="fileInput" accept="image/*" style="display:none;">
+            <p class="drop-zone-hint" style="margin-top: 12px;">Supports: PNG, JPG, BMP, WEBP</p>
         </div>
 
+        <!-- Image preview -->
+        <div class="preview-container" id="previewContainer">
+            <div class="preview-box">
+                <button class="preview-remove" onclick="removePreview()">✕</button>
+                <img id="previewImage" src="" alt="Preview">
+                <p class="preview-filename" id="previewFilename"></p>
+            </div>
+        </div>
+
+        <!-- Action buttons -->
+        <div class="buttons">
+            <button class="btn btn-predict" id="predictBtn" onclick="predict()">🔍 Recognize Text</button>
+            <button class="btn btn-clear" onclick="clearAll()">🗑️ Clear</button>
+        </div>
+
+        <!-- Result -->
         <div class="result-box">
             <div class="result-label">Recognized Text</div>
-            <div class="result-text" id="resultText">Draw something above...</div>
+            <div class="result-text" id="resultText">Draw or upload an image above...</div>
             <div class="result-confidence" id="resultConfidence"></div>
+
+            <div class="result-actions" id="resultActions">
+                <button onclick="copyText()" id="copyBtn">📋 Copy Text</button>
+                <button onclick="downloadTxt()">📄 Download .txt</button>
+                <button onclick="downloadPdf()">📕 Download .pdf</button>
+            </div>
+        </div>
+
+        <!-- Processing pipeline -->
+        <div class="pipeline">
+            <div class="pipeline-title">Processing Pipeline</div>
+            <div class="pipeline-steps" id="pipelineSteps">
+                <span class="pipeline-step" id="step-upload">Image</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-step" id="step-preprocess">Preprocessing</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-step" id="step-crnn">CRNN OCR</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-step" id="step-beam">Beam Search</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-step" id="step-lm">Language Model</span>
+                <span class="pipeline-arrow">→</span>
+                <span class="pipeline-step" id="step-result">Text</span>
+            </div>
         </div>
 
         <div class="status" id="status"></div>
     </div>
 
     <script>
+        // =================================================================
+        // STATE
+        // =================================================================
+        let currentMode = 'draw'; // 'draw' or 'upload'
+        let uploadedImageBase64 = null;
+        let recognizedText = '';
+
+        // =================================================================
+        // CANVAS DRAWING
+        // =================================================================
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
 
-        // Set up canvas
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = '#fff';
@@ -115,13 +279,10 @@
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
-        // Mouse events
         canvas.addEventListener('mousedown', startDraw);
         canvas.addEventListener('mousemove', draw);
         canvas.addEventListener('mouseup', stopDraw);
         canvas.addEventListener('mouseout', stopDraw);
-
-        // Touch events
         canvas.addEventListener('touchstart', e => { e.preventDefault(); startDraw(getTouchPos(e)); });
         canvas.addEventListener('touchmove', e => { e.preventDefault(); draw(getTouchPos(e)); });
         canvas.addEventListener('touchend', stopDraw);
@@ -134,76 +295,154 @@
                 offsetY: (touch.clientY - rect.top) * (canvas.height / rect.height)
             };
         }
-
-        function startDraw(e) {
-            isDrawing = true;
-            lastX = e.offsetX;
-            lastY = e.offsetY;
-        }
-
+        function startDraw(e) { isDrawing = true; lastX = e.offsetX; lastY = e.offsetY; }
         function draw(e) {
             if (!isDrawing) return;
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
-            ctx.stroke();
-            lastX = e.offsetX;
-            lastY = e.offsetY;
+            ctx.beginPath(); ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke();
+            lastX = e.offsetX; lastY = e.offsetY;
         }
-
         function stopDraw() { isDrawing = false; }
 
-        function clearCanvas() {
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            document.getElementById('resultText').textContent = 'Draw something above...';
-            document.getElementById('resultConfidence').textContent = '';
-            document.getElementById('status').textContent = '';
+        // =================================================================
+        // TAB SWITCHING
+        // =================================================================
+        function switchTab(mode) {
+            currentMode = mode;
+            const tabs = document.querySelectorAll('.input-tabs button');
+            tabs[0].classList.toggle('active', mode === 'draw');
+            tabs[1].classList.toggle('active', mode === 'upload');
+
+            document.getElementById('drawSection').style.display = mode === 'draw' ? 'block' : 'none';
+            document.getElementById('uploadSection').classList.toggle('active', mode === 'upload');
         }
 
-        // Upload image file
-        document.getElementById('uploadInput').addEventListener('change', (e) => {
+        // =================================================================
+        // DRAG & DROP + FILE UPLOAD
+        // =================================================================
+        const dropZone = document.getElementById('uploadSection');
+        const fileInput = document.getElementById('fileInput');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleImageFile(file);
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
             const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    ctx.fillStyle = '#000';
-                    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                    // Scale to fit canvas (height=150, variable width up to 800)
-                    const scale = Math.min(canvas.width / img.width, canvas.height / img.height) * 0.9;
-                    const w = img.width * scale;
-                    const h = img.height * scale;
-                    const x = (canvas.width - w) / 2;
-                    const y = (canvas.height - h) / 2;
-
-                    ctx.drawImage(img, x, y, w, h);
-                };
-                img.src = event.target.result;
-            };
-            reader.readAsDataURL(file);
+            if (file) handleImageFile(file);
             e.target.value = '';
         });
 
+        function handleImageFile(file) {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                uploadedImageBase64 = event.target.result.split(',')[1];
+                showPreview(event.target.result, file.name);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // =================================================================
+        // IMAGE PREVIEW
+        // =================================================================
+        function showPreview(dataUrl, filename) {
+            const container = document.getElementById('previewContainer');
+            document.getElementById('previewImage').src = dataUrl;
+            document.getElementById('previewFilename').textContent = filename || '';
+            container.classList.add('active');
+        }
+
+        function removePreview() {
+            document.getElementById('previewContainer').classList.remove('active');
+            uploadedImageBase64 = null;
+        }
+
+        // =================================================================
+        // CLEAR ALL
+        // =================================================================
+        function clearAll() {
+            // Clear canvas
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clear upload
+            removePreview();
+            // Clear result
+            document.getElementById('resultText').textContent = 'Draw or upload an image above...';
+            document.getElementById('resultConfidence').textContent = '';
+            document.getElementById('resultActions').classList.remove('active');
+            document.getElementById('status').textContent = '';
+            recognizedText = '';
+            // Reset pipeline
+            resetPipeline();
+        }
+
+        // =================================================================
+        // PIPELINE ANIMATION
+        // =================================================================
+        function resetPipeline() {
+            document.querySelectorAll('.pipeline-step').forEach(s => s.classList.remove('active'));
+        }
+
+        function activateStep(stepId) {
+            document.getElementById(stepId).classList.add('active');
+        }
+
+        // =================================================================
+        // PREDICT (OCR)
+        // =================================================================
         async function predict() {
             const btn = document.getElementById('predictBtn');
             const status = document.getElementById('status');
             btn.disabled = true;
             status.textContent = 'Recognizing...';
             status.className = 'status loading';
+            document.getElementById('resultActions').classList.remove('active');
+            resetPipeline();
 
             try {
-                const imageData = canvas.toDataURL('image/png');
-                const base64 = imageData.split(',')[1];
+                let base64Data;
+
+                // Step 1: Get image
+                activateStep('step-upload');
+                if (currentMode === 'upload' && uploadedImageBase64) {
+                    base64Data = uploadedImageBase64;
+                } else {
+                    // Use canvas
+                    const imageData = canvas.toDataURL('image/png');
+                    base64Data = imageData.split(',')[1];
+                }
+
+                // Step 2: Preprocessing
+                await sleep(100);
+                activateStep('step-preprocess');
+
+                // Step 3-5: Send to API (CRNN + Beam Search + LM happen server-side)
+                await sleep(100);
+                activateStep('step-crnn');
 
                 const response = await fetch('/predict/ocr/base64', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: base64 })
+                    body: JSON.stringify({
+                        image: base64Data,
+                        decode: 'beam_search',
+                        beam_width: 10
+                    })
                 });
+
+                activateStep('step-beam');
 
                 if (!response.ok) {
                     const err = await response.json();
@@ -211,10 +450,23 @@
                 }
 
                 const data = await response.json();
-                document.getElementById('resultText').textContent = data.text || '(empty)';
+                activateStep('step-lm');
+
+                await sleep(100);
+                activateStep('step-result');
+
+                // Show result
+                recognizedText = data.text || '(empty)';
+                document.getElementById('resultText').textContent = recognizedText;
                 document.getElementById('resultConfidence').textContent =
                     `Confidence: ${(data.confidence * 100).toFixed(1)}%`;
                 status.textContent = '';
+
+                // Show action buttons if we have text
+                if (recognizedText && recognizedText !== '(empty)') {
+                    document.getElementById('resultActions').classList.add('active');
+                }
+
             } catch (err) {
                 status.textContent = 'Error: ' + err.message;
                 status.className = 'status error';
@@ -223,6 +475,113 @@
             }
 
             btn.disabled = false;
+        }
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        // =================================================================
+        // COPY TEXT
+        // =================================================================
+        function copyText() {
+            if (!recognizedText) return;
+            navigator.clipboard.writeText(recognizedText).then(() => {
+                const btn = document.getElementById('copyBtn');
+                btn.textContent = '✅ Copied!';
+                btn.classList.add('copied');
+                setTimeout(() => {
+                    btn.textContent = '📋 Copy Text';
+                    btn.classList.remove('copied');
+                }, 2000);
+            });
+        }
+
+        // =================================================================
+        // DOWNLOAD AS .TXT
+        // =================================================================
+        function downloadTxt() {
+            if (!recognizedText) return;
+            const blob = new Blob([recognizedText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ocr_output.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // =================================================================
+        // DOWNLOAD AS PDF
+        // =================================================================
+        function downloadPdf() {
+            if (!recognizedText) return;
+
+            // Simple PDF generation (no external library needed)
+            const pdfContent = `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792]
+   /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>
+endobj
+
+4 0 obj
+<< /Length ${getTextStreamLength(recognizedText)} >>
+stream
+BT
+/F1 16 Tf
+50 700 Td
+(OCR Output - Handwritten Text Recognition) Tj
+0 -30 Td
+/F1 12 Tf
+(${escPdf(recognizedText)}) Tj
+0 -40 Td
+/F1 10 Tf
+(Generated by Handwritten Digit Recognition CNN) Tj
+ET
+endstream
+endobj
+
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000266 00000 n
+0000000${(400 + recognizedText.length).toString().padStart(3, '0')} 00000 n
+
+trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+${500 + recognizedText.length}
+%%EOF`;
+
+            const blob = new Blob([pdfContent], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'ocr_output.pdf';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function escPdf(text) {
+            return text.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+        }
+
+        function getTextStreamLength(text) {
+            const escaped = escPdf(text);
+            return 80 + escaped.length + 100; // approximate
         }
     </script>
 </body>
