@@ -109,6 +109,7 @@ Handwritten-Digit-Recognition-CNN/
 │   ├── mlp_model.py               # MLP baseline for comparison
 │   ├── crnn_model.py              # CRNN (CNN + BiLSTM) for OCR
 │   ├── ocr_dataset.py             # Synthetic OCR data generator
+│   ├── iam_dataset.py             # IAM & RIMES real handwriting datasets
 │   └── ocr_utils.py               # Charset, CTC decoding, CER/WER metrics
 │
 ├── data/                          # Data loading & preprocessing
@@ -284,11 +285,41 @@ python train_ocr.py
 
 # Custom configuration
 python train_ocr.py --epochs 30 --batch-size 32 --lr 0.001 --samples 10000
+
+# Train on IAM Handwriting Database (real English handwriting)
+python train_ocr.py --dataset iam --data-dir ./data/iam
+
+# Train on RIMES Dataset (real French handwriting)
+python train_ocr.py --dataset rimes --data-dir ./data/rimes
+
+# Train on real data with more epochs
+python train_ocr.py --dataset iam --data-dir ./data/iam --epochs 50 --batch-size 64
+```
+
+**Supported Datasets:**
+
+| Dataset | Language | Samples | Source |
+|---------|----------|---------|--------|
+| `synthetic` | English + Arabic + Digits | Generated on-the-fly | No download needed |
+| `iam` | English | ~13,000 text lines | [IAM Database](https://fki.tic.heia-fr.ch/databases/iam-handwriting-database) |
+| `rimes` | French | ~12,000 text lines | [RIMES Database](http://www.a2ialab.com/doku.php?id=rimes_database) |
+
+**Dataset setup (IAM):**
+```
+data/iam/
+├── lines/              # Line images (a01-000u-00.png, ...)
+│   ├── a01/
+│   │   ├── a01-000u/
+│   │   │   └── *.png
+│   │   └── ...
+│   └── ...
+└── lines.txt           # Annotations file
 ```
 
 **How it works:**
-- Generates synthetic handwriting images (no external dataset needed)
-- Supports English (A–Z, a–z), Arabic (28 letters), digits (0–9), and punctuation
+- Supports both synthetic generation and real handwriting datasets
+- Automatic fallback to synthetic if real dataset not found
+- Data augmentation for real datasets (rotation, blur, noise)
 - Uses CTC loss for variable-length sequence alignment
 - Reports Character Error Rate (CER) during validation
 - Saves best model based on lowest CER
@@ -791,7 +822,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~ResNet-style skip connections for deeper architectures~~
 - [x] ~~Model quantization for edge deployment~~
 - [x] ~~ONNX export for cross-platform inference~~
-- [ ] Real handwriting dataset training (IAM, RIMES)
+- [x] ~~Real handwriting dataset training (IAM, RIMES)~~
 - [ ] Beam search CTC decoding for better OCR accuracy
 - [ ] Language model integration for OCR post-processing
 

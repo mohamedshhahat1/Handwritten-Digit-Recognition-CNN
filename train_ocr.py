@@ -24,9 +24,11 @@ from torch.utils.data import DataLoader
 from model.crnn_model import CRNN
 from model.ocr_utils import OCRCharset, ctc_decode_batch, ctc_collate_fn, compute_cer
 from model.ocr_dataset import SyntheticOCRDataset
+from model.iam_dataset import get_ocr_dataset, check_dataset_available
 
 
-def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000):
+def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
+              dataset_name='synthetic', data_dir=None):
     """
     Train the CRNN OCR model.
 
@@ -34,7 +36,9 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000):
         epochs (int): Number of training epochs.
         batch_size (int): Batch size for training.
         learning_rate (float): Initial learning rate.
-        num_samples (int): Number of synthetic samples per epoch.
+        num_samples (int): Number of synthetic samples per epoch (for synthetic mode).
+        dataset_name (str): Dataset to use: 'synthetic', 'iam', or 'rimes'.
+        data_dir (str): Root directory for real datasets (IAM/RIMES).
     """
     print("=" * 60)
     print("  OCR TRAINING — CRNN (CNN + BiLSTM + CTC)")
@@ -43,11 +47,22 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000):
     # Device
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f"\nDevice: {device}")
+    print(f"Dataset: {dataset_name.upper()}")
 
     # Character set
     charset = OCRCharset()
     print(f"Character set: {charset}")
     print(f"Total classes (with blank): {charset.num_classes}")
+
+    # Check dataset availability for real datasets
+    if dataset_name != 'synthetic':
+        available, msg = check_dataset_available(dataset_name, data_dir)
+        if not available:
+            print(f"\n  ⚠ {msg}")
+            print(f"\n  Falling back to synthetic dataset...")
+            dataset_name = 'synthetic'
+        else:
+            print(f"  ✓ {msg}")
 
     # Create model
     model = CRNN(
@@ -60,20 +75,42 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000):
     print(f"Model parameters: {total_params:,}")
 
     # Datasets
-    print(f"\nGenerating {num_samples} synthetic training samples...")
-    train_dataset = SyntheticOCRDataset(
-        charset=charset,
-        num_samples=num_samples,
-        img_height=32,
-        max_text_len=20,
-    )
+    print(f"\nPreparing {dataset_name} dataset...")
 
-    val_dataset = SyntheticOCRDataset(
-        charset=charset,
-        num_samples=num_samples // 5,
-        img_height=32,
-        max_text_len=20,
-    )
+    if dataset_name == 'synthetic':
+        print(f"  Generating {num_samples} synthetic training samples...")
+        train_dataset = SyntheticOCRDataset(
+            charset=charset,
+            num_samples=num_samples,
+            img_height=32,
+            max_text_len=20,
+        )
+        val_dataset = SyntheticOCRDataset(
+            charset=charset,
+            num_samples=num_samples // 5,
+            img_height=32,
+            max_text_len=20,
+        )
+    else:
+        # Real handwriting dataset (IAM or RIMES)
+        train_dataset = get_ocr_dataset(
+            dataset_name=dataset_name,
+            data_dir=data_dir,
+            charset=charset,
+            split='train',
+            img_height=32,
+            max_text_len=100,
+            augment=True,
+        )
+        val_dataset = get_ocr_dataset(
+            dataset_name=dataset_name,
+            data_dir=data_dir,
+            charset=charset,
+            split='val',
+            img_height=32,
+            max_text_len=100,
+            augment=False,
+        )
 
     train_loader = DataLoader(
         train_dataset,
@@ -208,11 +245,27 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Train OCR CRNN model")
+    parser = argparse.ArgumentParser(
+        description="Train OCR CRNN model on synthetic or real handwriting data",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python train_ocr.py                                 # Synthetic data (default)
+  python train_ocr.py --dataset iam --data-dir ./data/iam    # IAM dataset
+  python train_ocr.py --dataset rimes --data-dir ./data/rimes  # RIMES dataset
+  python train_ocr.py --epochs 30 --batch-size 64     # Custom training params
+        """
+    )
     parser.add_argument("--epochs", type=int, default=20, help="Number of epochs")
     parser.add_argument("--batch-size", type=int, default=32, help="Batch size")
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
-    parser.add_argument("--samples", type=int, default=5000, help="Training samples per epoch")
+    parser.add_argument("--samples", type=int, default=5000,
+                        help="Training samples per epoch (synthetic mode only)")
+    parser.add_argument("--dataset", type=str, default="synthetic",
+                        choices=["synthetic", "iam", "rimes"],
+                        help="Dataset to use: 'synthetic', 'iam', or 'rimes' (default: synthetic)")
+    parser.add_argument("--data-dir", type=str, default=None,
+                        help="Root directory for real dataset (default: ./data/{dataset})")
     args = parser.parse_args()
 
     train_ocr(
@@ -220,4 +273,6 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
         learning_rate=args.lr,
         num_samples=args.samples,
+        dataset_name=args.dataset,
+        data_dir=args.data_dir,
     )

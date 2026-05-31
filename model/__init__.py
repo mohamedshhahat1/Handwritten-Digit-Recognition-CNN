@@ -9,14 +9,25 @@ Available models:
     - ResNetCNN: Deeper ResNet-style architecture with skip connections (higher accuracy)
     - CRNN: CNN + BiLSTM for OCR text recognition
     - MLP: Multi-layer perceptron baseline (no spatial awareness)
+
+Available datasets:
+    - SyntheticOCRDataset: Generated synthetic handwriting images
+    - IAMDataset: IAM Handwriting Database (real English handwriting)
+    - RIMESDataset: RIMES Database (real French handwriting)
 """
 
 from model.cnn_model import CNN, ResNetCNN, ResidualBlock
 from model.mlp_model import MLP
 from model.crnn_model import CRNN
 from model.ocr_utils import OCRCharset
+from model.iam_dataset import IAMDataset, RIMESDataset, get_ocr_dataset
 
 # Alias for backward compatibility
 MNISTNet = CNN
 
-__all__ = ["CNN", "ResNetCNN", "ResidualBlock", "CRNN", "OCRCharset", "MLP", "MNISTNet"]
+__all__ = [
+    "CNN", "ResNetCNN", "ResidualBlock",
+    "CRNN", "OCRCharset",
+    "MLP", "MNISTNet",
+    "IAMDataset", "RIMESDataset", "get_ocr_dataset",
+]
