@@ -153,13 +153,167 @@ def ctc_decode_greedy(predictions):
     return decoded
 
 
-def ctc_decode_batch(log_probs, charset):
+def ctc_decode_beam_search(log_probs, beam_width=10, blank_id=0):
+    """
+    Beam search CTC decoding — explores multiple hypotheses in parallel.
+
+    Unlike greedy decoding (which only keeps the single best character at each
+    timestep), beam search maintains the top-K most probable sequences. This
+    finds better overall paths through the probability matrix because it can
+    recover from locally suboptimal choices.
+
+    How it works:
+        At each timestep, every beam is extended by every possible character.
+        The resulting candidates are scored by their cumulative log-probability,
+        and only the top beam_width candidates survive to the next step.
+
+    CTC-specific handling:
+        - Blank tokens (index 0) are tracked but don't emit characters
+        - Repeated characters are collapsed unless separated by a blank
+        - Two beams with the same text but different blank/non-blank endings
+          are kept separately (they merge differently at the next step)
+
+    Args:
+        log_probs (torch.Tensor or np.ndarray): Shape (seq_len, num_classes).
+            Log-probabilities at each timestep (output of log_softmax).
+        beam_width (int): Number of hypotheses to keep at each step.
+            Higher = better accuracy but slower. Default: 10.
+            Typical values: 5-25 for good accuracy/speed tradeoff.
+        blank_id (int): Index of the CTC blank token (default: 0).
+
+    Returns:
+        list[int]: Best decoded character indices (without blanks or repeats).
+
+    Performance:
+        - O(T * beam_width * num_classes) time complexity
+        - Typically 2-5% CER improvement over greedy on real data
+        - ~10-50x slower than greedy (still fast for single samples)
+
+    Example:
+        Greedy might pick: [0, 5, 5, 0, 2, 0, 9] → "h e l" (suboptimal)
+        Beam search explores alternatives and finds a better global path.
+    """
+    if isinstance(log_probs, torch.Tensor):
+        log_probs = log_probs.cpu().numpy()
+
+    seq_len, num_classes = log_probs.shape
+
+    # Each beam is: (prefix_tuple, log_prob_blank_end, log_prob_non_blank_end)
+    # We track blank/non-blank endings separately for correct CTC merging.
+    #
+    # Why? In CTC, "aa" and "a-a" (where - is blank) produce different texts:
+    # "aa" collapses to "a", but "a-a" gives "aa".
+    # So a beam ending in blank can extend differently than one ending in non-blank.
+
+    NEG_INF = float('-inf')
+
+    # Initial state: empty prefix, starts as "blank ending" with probability 1
+    # Format: {prefix: (log_prob_blank, log_prob_non_blank)}
+    beams = {(): (0.0, NEG_INF)}  # empty prefix, blank prob = log(1) = 0
+
+    for t in range(seq_len):
+        new_beams = {}  # Candidates for this timestep
+
+        for prefix, (log_pb, log_pnb) in beams.items():
+            # Total log probability of this prefix (log-sum-exp of blank and non-blank)
+            log_p_total = _log_add(log_pb, log_pnb)
+
+            for c in range(num_classes):
+                log_p_c = log_probs[t, c]
+
+                if c == blank_id:
+                    # Extending with blank: doesn't change the prefix text
+                    # Both blank-ending and non-blank-ending beams can emit blank
+                    new_log_pb = log_p_total + log_p_c
+                    _beam_update(new_beams, prefix, new_log_pb, is_blank=True)
+
+                else:
+                    # Extending with a character
+                    if prefix and prefix[-1] == c:
+                        # Same character as the end of prefix:
+                        # - From blank-ending: emits a new character (e.g., "a" + blank + "a" = "aa")
+                        # - From non-blank-ending: merges (e.g., "a" + "a" = "a", collapsed)
+                        new_log_pnb_from_blank = log_pb + log_p_c
+                        _beam_update(new_beams, prefix + (c,), new_log_pnb_from_blank, is_blank=False)
+
+                        # Non-blank ending with same char: stays as current prefix (collapse)
+                        new_log_pnb_merge = log_pnb + log_p_c
+                        _beam_update(new_beams, prefix, new_log_pnb_merge, is_blank=False)
+                    else:
+                        # Different character: always extends the prefix
+                        new_log_pnb = log_p_total + log_p_c
+                        _beam_update(new_beams, prefix + (c,), new_log_pnb, is_blank=False)
+
+        # Prune: keep only the top beam_width beams by total probability
+        scored_beams = [
+            (prefix, log_pb, log_pnb, _log_add(log_pb, log_pnb))
+            for prefix, (log_pb, log_pnb) in new_beams.items()
+        ]
+        scored_beams.sort(key=lambda x: x[3], reverse=True)
+        scored_beams = scored_beams[:beam_width]
+
+        beams = {prefix: (log_pb, log_pnb) for prefix, log_pb, log_pnb, _ in scored_beams}
+
+    # Return the best beam's prefix
+    if not beams:
+        return []
+
+    best_prefix = max(beams.keys(), key=lambda p: _log_add(beams[p][0], beams[p][1]))
+    return list(best_prefix)
+
+
+def _log_add(log_a, log_b):
+    """
+    Numerically stable log-addition: log(exp(a) + exp(b)).
+
+    Uses the log-sum-exp trick to avoid overflow/underflow:
+        log(exp(a) + exp(b)) = max(a,b) + log(1 + exp(-|a-b|))
+    """
+    if log_a == float('-inf'):
+        return log_b
+    if log_b == float('-inf'):
+        return log_a
+    if log_a > log_b:
+        return log_a + np.log1p(np.exp(log_b - log_a))
+    else:
+        return log_b + np.log1p(np.exp(log_a - log_b))
+
+
+def _beam_update(beams_dict, prefix, log_prob, is_blank):
+    """
+    Update a beam entry, accumulating probability for the same prefix.
+
+    Args:
+        beams_dict (dict): Current beam dictionary.
+        prefix (tuple): Character prefix tuple.
+        log_prob (float): Log probability to add.
+        is_blank (bool): Whether this extension ends in blank.
+    """
+    if prefix not in beams_dict:
+        beams_dict[prefix] = (float('-inf'), float('-inf'))
+
+    log_pb, log_pnb = beams_dict[prefix]
+
+    if is_blank:
+        beams_dict[prefix] = (_log_add(log_pb, log_prob), log_pnb)
+    else:
+        beams_dict[prefix] = (log_pb, _log_add(log_pnb, log_prob))
+
+
+def ctc_decode_batch(log_probs, charset, method='greedy', beam_width=10):
     """
     Decode a batch of CTC outputs to text strings.
+
+    Supports both greedy and beam search decoding methods.
 
     Args:
         log_probs (torch.Tensor): Shape (seq_len, batch, num_classes).
         charset (OCRCharset): Character set for decoding.
+        method (str): Decoding method — 'greedy' or 'beam_search'.
+            - 'greedy': Fast, picks best character at each timestep.
+            - 'beam_search': Slower but more accurate, explores multiple paths.
+        beam_width (int): Beam width for beam search (default: 10).
+            Ignored if method='greedy'.
 
     Returns:
         list[str]: Decoded text for each sample in the batch.
@@ -170,8 +324,12 @@ def ctc_decode_batch(log_probs, charset):
     for b in range(batch_size):
         # Get predictions for this sample: (seq_len, num_classes)
         sample_preds = log_probs[:, b, :]
-        # Greedy decode
-        indices = ctc_decode_greedy(sample_preds)
+
+        if method == 'beam_search':
+            indices = ctc_decode_beam_search(sample_preds, beam_width=beam_width)
+        else:
+            indices = ctc_decode_greedy(sample_preds)
+
         # Convert to text
         text = charset.decode(indices)
         texts.append(text)

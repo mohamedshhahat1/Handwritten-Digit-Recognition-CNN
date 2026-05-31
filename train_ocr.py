@@ -28,7 +28,8 @@ from model.iam_dataset import get_ocr_dataset, check_dataset_available
 
 
 def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
-              dataset_name='synthetic', data_dir=None):
+              dataset_name='synthetic', data_dir=None, decode_method='greedy',
+              beam_width=10):
     """
     Train the CRNN OCR model.
 
@@ -39,6 +40,8 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
         num_samples (int): Number of synthetic samples per epoch (for synthetic mode).
         dataset_name (str): Dataset to use: 'synthetic', 'iam', or 'rimes'.
         data_dir (str): Root directory for real datasets (IAM/RIMES).
+        decode_method (str): CTC decoding method: 'greedy' or 'beam_search'.
+        beam_width (int): Beam width for beam search decoding (default: 10).
     """
     print("=" * 60)
     print("  OCR TRAINING — CRNN (CNN + BiLSTM + CTC)")
@@ -140,6 +143,10 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
 
     print(f"\nStarting training for {epochs} epochs...")
     print(f"Batch size: {batch_size}, LR: {learning_rate}")
+    decode_info = f"Decode: {decode_method}"
+    if decode_method == 'beam_search':
+        decode_info += f" (beam_width={beam_width})"
+    print(decode_info)
     print("-" * 60)
 
     for epoch in range(1, epochs + 1):
@@ -182,7 +189,9 @@ def train_ocr(epochs=20, batch_size=32, learning_rate=0.001, num_samples=5000,
                 images = images.to(device)
 
                 outputs = model(images)
-                predicted_texts = ctc_decode_batch(outputs, charset)
+                predicted_texts = ctc_decode_batch(
+                    outputs, charset, method=decode_method, beam_width=beam_width
+                )
 
                 # Decode ground truth labels
                 offset = 0
@@ -266,6 +275,11 @@ Examples:
                         help="Dataset to use: 'synthetic', 'iam', or 'rimes' (default: synthetic)")
     parser.add_argument("--data-dir", type=str, default=None,
                         help="Root directory for real dataset (default: ./data/{dataset})")
+    parser.add_argument("--decode", type=str, default="greedy",
+                        choices=["greedy", "beam_search"],
+                        help="CTC decoding method: 'greedy' or 'beam_search' (default: greedy)")
+    parser.add_argument("--beam-width", type=int, default=10,
+                        help="Beam width for beam search decoding (default: 10)")
     args = parser.parse_args()
 
     train_ocr(
@@ -275,4 +289,6 @@ Examples:
         num_samples=args.samples,
         dataset_name=args.dataset,
         data_dir=args.data_dir,
+        decode_method=args.decode,
+        beam_width=args.beam_width,
     )

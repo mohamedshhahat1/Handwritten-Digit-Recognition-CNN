@@ -357,14 +357,19 @@ class OCRResponse(BaseModel):
 class OCRBase64Request(BaseModel):
     """Request body for base64 OCR prediction."""
     image: str
+    decode: str = "greedy"      # 'greedy' or 'beam_search'
+    beam_width: int = 10        # Beam width for beam search
 
 
 @app.post("/predict/ocr", response_model=OCRResponse)
-async def predict_ocr(file: UploadFile = File(...)):
+async def predict_ocr(file: UploadFile = File(...), decode: str = "greedy",
+                      beam_width: int = 10):
     """
     Recognize text from an uploaded image using OCR (CRNN + CTC).
 
-    Returns the recognized text string.
+    Query params:
+        decode: 'greedy' (fast) or 'beam_search' (more accurate). Default: greedy.
+        beam_width: Number of beams for beam search (default: 10).
     """
     if ocr_model is None:
         raise HTTPException(status_code=503, detail="OCR model not loaded. Train with: python train_ocr.py")
@@ -377,7 +382,7 @@ async def predict_ocr(file: UploadFile = File(...)):
 
     try:
         tensor = preprocess_ocr_image(image)
-        result = run_ocr_inference(tensor)
+        result = run_ocr_inference(tensor, decode_method=decode, beam_width=beam_width)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR inference error: {str(e)}")
 
@@ -390,6 +395,7 @@ async def predict_ocr_base64(request: OCRBase64Request):
     Recognize text from a base64-encoded image using OCR.
 
     Accepts JSON body with a base64-encoded image (or data URL).
+    Optionally set decode='beam_search' and beam_width in the JSON body.
     Returns recognized text.
     """
     if ocr_model is None:
@@ -407,19 +413,23 @@ async def predict_ocr_base64(request: OCRBase64Request):
 
     try:
         tensor = preprocess_ocr_image(image)
-        result = run_ocr_inference(tensor)
+        result = run_ocr_inference(
+            tensor, decode_method=request.decode, beam_width=request.beam_width
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"OCR inference error: {str(e)}")
 
     return result
 
 
-def run_ocr_inference(tensor):
+def run_ocr_inference(tensor, decode_method='greedy', beam_width=10):
     """
     Run OCR inference on a preprocessed image tensor.
 
     Args:
         tensor (torch.Tensor): Shape (1, 1, 32, W).
+        decode_method (str): 'greedy' or 'beam_search'.
+        beam_width (int): Beam width for beam search (default: 10).
 
     Returns:
         dict: {"text": str, "confidence": float, "model_loaded": True}
@@ -434,8 +444,10 @@ def run_ocr_inference(tensor):
         max_probs = probs.max(dim=2)[0]  # Max prob at each timestep
         confidence = float(max_probs.mean())
 
-        # Decode with CTC
-        texts = ctc_decode_batch(output, ocr_charset)
+        # Decode with CTC (greedy or beam search)
+        texts = ctc_decode_batch(
+            output, ocr_charset, method=decode_method, beam_width=beam_width
+        )
         text = texts[0] if texts else ""
 
     return {

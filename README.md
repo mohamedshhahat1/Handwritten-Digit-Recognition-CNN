@@ -823,7 +823,7 @@ Recognize handwritten text from base64 image.
 - [x] ~~Model quantization for edge deployment~~
 - [x] ~~ONNX export for cross-platform inference~~
 - [x] ~~Real handwriting dataset training (IAM, RIMES)~~
-- [ ] Beam search CTC decoding for better OCR accuracy
+- [x] ~~Beam search CTC decoding for better OCR accuracy~~
 - [ ] Language model integration for OCR post-processing
 
 ---
